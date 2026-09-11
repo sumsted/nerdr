@@ -1,0 +1,208 @@
+{
+  "name": "nerdr",
+  "displayName": "Nerdr",
+  "description": "Herdr-like awareness for OpenCode agents running in VSCodium terminals.",
+  "version": "0.1.0",
+  "publisher": "nerdr",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "opencode",
+    "agents",
+    "herdr",
+    "codium"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "files": [
+    "dist",
+    "media",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "package": "vsce package --no-dependencies --allow-missing-repository"
+  },
+  "dependencies": {
+    "@nerdr/protocol": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "nerdr.focusAgent",
+        "title": "Nerdr: Focus Agent Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "nerdr.refresh",
+        "title": "Nerdr: Refresh Agents",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nerdr.testBell",
+        "title": "Nerdr: Test Bell"
+      },
+      {
+        "command": "nerdr.renameAgent",
+        "title": "Nerdr: Rename Agent",
+        "icon": "$(pencil)"
+      },
+      {
+        "command": "nerdr.clearFinished",
+        "title": "Nerdr: Clear Finished Agents"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nerdr",
+          "title": "Nerdr",
+          "icon": "media/nerdr.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "nerdrPanel",
+          "title": "Nerdr",
+          "icon": "media/nerdr.svg"
+        }
+      ]
+    },
+    "views": {
+      "nerdr": [
+        {
+          "id": "nerdr.agents",
+          "name": "Agents",
+          "icon": "media/nerdr.svg",
+          "contextualTitle": "Nerdr Agents"
+        }
+      ],
+      "nerdrPanel": [
+        {
+          "id": "nerdr.agentsPanel",
+          "name": "Agents",
+          "icon": "media/nerdr.svg",
+          "contextualTitle": "Nerdr Agents"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "nerdr.refresh",
+          "when": "view == nerdr.agents || view == nerdr.agentsPanel",
+          "group": "navigation"
+        },
+        {
+          "command": "nerdr.clearFinished",
+          "when": "view == nerdr.agents || view == nerdr.agentsPanel",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "nerdr.focusAgent",
+          "when": "view == nerdr.agents && viewItem == nerdr.agent",
+          "group": "inline"
+        },
+        {
+          "command": "nerdr.focusAgent",
+          "when": "view == nerdr.agentsPanel && viewItem == nerdr.agent",
+          "group": "inline"
+        },
+        {
+          "command": "nerdr.renameAgent",
+          "when": "view == nerdr.agents && viewItem == nerdr.agent",
+          "group": "inline@2"
+        },
+        {
+          "command": "nerdr.renameAgent",
+          "when": "view == nerdr.agentsPanel && viewItem == nerdr.agent",
+          "group": "inline@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Nerdr",
+      "properties": {
+        "nerdr.port": {
+          "type": "number",
+          "default": 27182,
+          "description": "Loopback TCP port for the OpenCode agent bridge. The extension falls back to the next free port and writes it to ~/.nerdr/bridge.json."
+        },
+        "nerdr.bell.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play a bell tone when an agent needs attention."
+        },
+        "nerdr.bell.states": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "working",
+              "blocked",
+              "idle",
+              "done",
+              "error",
+              "unknown"
+            ]
+          },
+          "default": [
+            "blocked",
+            "error",
+            "done"
+          ],
+          "description": "Agent states that trigger a bell tone."
+        },
+        "nerdr.bell.agents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "build",
+            "plan"
+          ],
+          "description": "Agent/mode names allowed to ring the completion (done) bell. Attention bells (blocked/error) always ring. Leave empty to allow every agent."
+        },
+        "nerdr.bell.command": {
+          "type": "string",
+          "default": "",
+          "description": "Custom command to play the bell. Leave empty to use the platform default (afplay on macOS, paplay/printf on Linux, PowerShell beep on Windows)."
+        },
+        "nerdr.bell.cooldownMs": {
+          "type": "number",
+          "default": 5000,
+          "description": "Minimum time between bells for the same agent, in milliseconds."
+        },
+        "nerdr.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a Nerdr summary in the status bar."
+        },
+        "nerdr.staleTimeoutMs": {
+          "type": "number",
+          "default": 45000,
+          "description": "Mark an agent offline when no bridge message is received within this window."
+        }
+      }
+    }
+  }
+}

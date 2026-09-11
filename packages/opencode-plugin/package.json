@@ -1,0 +1,24 @@
+{
+  "name": "@nerdr/opencode-plugin",
+  "version": "0.1.0",
+  "description": "OpenCode plugin that reports agent state to the Nerdr VSCodium extension",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/nerdr.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node esbuild.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nerdr/protocol": "*"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.18.0",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
+  }
+}
