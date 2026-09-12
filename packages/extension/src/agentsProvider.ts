@@ -40,8 +40,8 @@ function statusIcon(agent: AgentSnapshot): vscode.ThemeIcon {
 }
 
 export class AgentTreeItem extends vscode.TreeItem {
-  constructor(readonly snapshot: AgentSnapshot) {
-    super(snapshot.identity.title, vscode.TreeItemCollapsibleState.None);
+  constructor(readonly snapshot: AgentSnapshot, label: string = snapshot.identity.title) {
+    super(label, vscode.TreeItemCollapsibleState.None);
     const detail = snapshot.online ? STATUS_LABEL[snapshot.status] : "offline";
     const message = snapshot.message ? ` · ${snapshot.message}` : "";
     this.description = `${detail}${message}`;
@@ -64,6 +64,7 @@ export class AgentTreeItem extends vscode.TreeItem {
     md.appendMarkdown(`- Directory: \`${agent.identity.directory}\`\n`);
     if (agent.identity.worktree) md.appendMarkdown(`- Worktree: \`${agent.identity.worktree}\`\n`);
     if (agent.identity.sessionID) md.appendMarkdown(`- Session: \`${agent.identity.sessionID}\`\n`);
+    if (agent.identity.slug) md.appendMarkdown(`- Slug: \`${agent.identity.slug}\`\n`);
     if (agent.identity.agent) md.appendMarkdown(`- Agent: \`${agent.identity.agent}\`\n`);
     if (agent.identity.model) md.appendMarkdown(`- Model: \`${agent.identity.model}\`\n`);
     md.appendMarkdown(`- PID: \`${agent.identity.pid}\`\n`);
@@ -91,12 +92,25 @@ export class AgentsProvider implements vscode.TreeDataProvider<AgentTreeItem> {
   getChildren(element?: AgentTreeItem): AgentTreeItem[] {
     if (element) return [];
     const agents = [...this.getAgents()].sort(compareAgents);
-    return agents.map((agent) => new AgentTreeItem(agent));
+    const counts = new Map<string, number>();
+    for (const agent of agents) {
+      const key = agent.identity.title;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return agents.map((agent) => new AgentTreeItem(agent, disambiguate(agent, counts)));
   }
 
   dispose(): void {
     this._onDidChangeTreeData.dispose();
   }
+}
+
+/** Append the session slug when two agents share the same directory name. */
+function disambiguate(agent: AgentSnapshot, counts: Map<string, number>): string {
+  const title = agent.identity.title;
+  if ((counts.get(title) ?? 0) <= 1) return title;
+  const suffix = agent.identity.slug || `#${agent.identity.pid}`;
+  return `${title} · ${suffix}`;
 }
 
 function compareAgents(a: AgentSnapshot, b: AgentSnapshot): number {

@@ -64,6 +64,8 @@ export interface AgentIdentity {
   title: string;
   /** OpenCode session id, when known. */
   sessionID?: string;
+  /** OpenCode session slug (e.g. `tidy-falcon`), when known. */
+  slug?: string;
   /** OpenCode agent/mode name, when known. */
   agent?: string;
   /** Current model as `provider/model`. */
@@ -110,33 +112,6 @@ export interface AgentTodo {
   priority: string;
 }
 
-/**
- * Extension -> plugin command frames. Additive to protocol v1: plugins that
- * predate this simply ignore unknown server frames.
- */
-export type RenameCommand = {
-  type: "command";
-  command: "rename";
-  /** Agent to rename. */
-  agentId: string;
-  /** New session title. */
-  title: string;
-  /** Correlation id echoed back in the result. */
-  requestId: string;
-};
-
-export type ServerCommand = RenameCommand;
-
-/** Plugin -> extension result for a command frame. */
-export type CommandResultMessage = {
-  type: "command.result";
-  command: "rename";
-  agentId: string;
-  requestId: string;
-  ok: boolean;
-  error?: string;
-};
-
 /** Messages sent by the plugin to the extension. */
 export type ClientMessage =
   | {
@@ -161,13 +136,12 @@ export type ClientMessage =
       patch: Partial<
         Pick<
           AgentIdentity,
-          "title" | "sessionID" | "agent" | "model" | "worktree" | "serverUrl"
+          "title" | "sessionID" | "slug" | "agent" | "model" | "worktree" | "serverUrl"
         >
       > & { todos?: AgentTodo[] };
     }
   | { type: "bye"; agentId: string }
-  | { type: "ping"; at: number }
-  | CommandResultMessage;
+  | { type: "ping"; at: number };
 
 /** The mutable part of a snapshot that a `hello` carries. */
 export interface SnapshotPayload {
@@ -181,8 +155,7 @@ export interface SnapshotPayload {
 export type ServerMessage =
   | { type: "welcome"; protocol: typeof PROTOCOL_VERSION; at: number }
   | { type: "pong"; at: number }
-  | { type: "error"; message: string }
-  | ServerCommand;
+  | { type: "error"; message: string };
 
 /** Contents of the bridge discovery file written by the extension. */
 export interface BridgeInfo {

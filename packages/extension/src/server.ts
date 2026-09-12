@@ -16,7 +16,6 @@ import type {
   AgentStatus,
   BridgeInfo,
   ClientMessage,
-  CommandResultMessage,
   ServerMessage,
   SnapshotPayload,
 } from "@nerdr/protocol";
@@ -34,7 +33,6 @@ export interface BridgeHandlers {
   onPing(agentId: string | undefined): void;
   onBye(agentId: string): void;
   onDisconnect(agentId: string | undefined): void;
-  onCommandResult(result: CommandResultMessage): void;
 }
 
 interface ClientState {
@@ -154,21 +152,7 @@ export class BridgeServer implements vscode.Disposable {
       case "bye":
         this.handlers.onBye(message.agentId);
         break;
-      case "command.result":
-        this.handlers.onCommandResult(message);
-        break;
     }
-  }
-
-  /** Send a frame to the connection that owns `agentId`. Returns false if absent. */
-  sendToAgent(agentId: string, message: ServerMessage): boolean {
-    for (const [id, state] of this.clients) {
-      if (state.agentId === agentId) {
-        this.send(id, message);
-        return true;
-      }
-    }
-    return false;
   }
 
   private send(id: number, message: ServerMessage): void {

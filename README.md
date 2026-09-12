@@ -17,7 +17,7 @@ the owning terminal, and rings the bell.
 ┌─────────────────────────┐   loopback TCP (newline JSON)   ┌───────────────────────────┐
 │ OpenCode process        │ ──────────────────────────────▶ │ Nerdr VSCodium extension  │
 │ @nerdr/opencode-plugin  │ ◀────────────────────────────── │  • BridgeServer (:27182)  │
-│  • session/status hooks │     welcome / pong / rename      │  • AgentStore             │
+│  • session/status hooks │     welcome / pong               │  • AgentStore             │
 │  • permission + question│                                 │  • Agents TreeView        │
 └─────────────────────────┘                                 │  • TerminalLocator (ps)   │
              ▲                                               │  • Bell                   │
@@ -140,12 +140,20 @@ old copy in memory.
 The agent/mode (`build`, `plan`, …) and model are captured from `chat.message` and
 assistant messages, and shown in the item tooltip.
 
+## Agent naming
+
+Agents are named after the **workspace directory they were started in** — e.g. an
+agent launched in `~/code/nerdr` appears as `nerdr`. Nerdr deliberately does not
+use OpenCode's session title, because OpenCode auto-generates (and can regenerate)
+that title, for example when the first task completes. When two agents share a
+directory name, the OpenCode session slug is appended for disambiguation
+(`nerdr · tidy-falcon`).
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `Nerdr: Focus Agent Terminal` | Reveal the terminal hosting an agent |
-| `Nerdr: Rename Agent` | Set the agent's name (pencil icon on a row). Updates the real OpenCode session title via the bidirectional bridge |
 | `Nerdr: Refresh Agents` | Re-scan terminals and re-render |
 | `Nerdr: Clear Finished Agents` | Drop `done`/`idle` rows |
 | `Nerdr: Test Bell` | Play the configured tone |
@@ -196,12 +204,11 @@ Terminal** lands on the right pane. Windows matching is not implemented yet.
   **Nerdr** output channel (View → Output → Nerdr) for connection logs.
 - **No bell.** Run **Nerdr: Test Bell**. Then check `nerdr.bell.enabled`,
   `nerdr.bell.states`, and — for completion bells — `nerdr.bell.agents`.
-- **Rename fails with "no active session yet".** The agent has not created a
-  session yet; wait a moment and retry.
+- **Two agents look identical.** Agents are named after their project root
+  directory. When two agents share a name, Nerdr appends the OpenCode session slug
+  (e.g. `nerdr · tidy-falcon`).
 - **Port already in use.** The extension automatically tries the next free port
   and advertises it in `~/.nerdr/bridge.json`; the plugin follows.
-- **Multiple sessions in one process.** Rename targets the most recent session in
-  that process.
 
 ## Herdr features not covered
 
@@ -215,9 +222,8 @@ The core four requirements are implemented. The following Herdr capabilities are
 - **Live terminal views.** Herdr renders real pane contents. Nerdr shows status
   and focuses the existing terminal; it does not mirror output.
 - **Reading pane output.** No `agent read` equivalent (visible/recent/unwrapped).
-- **Driving agents from the UI/API.** Renaming is supported (extension → plugin
-  commands over the bridge). Still missing: send-keys, prompt, and
-  wait-until-blocked.
+- **Driving agents from the UI/API.** No send-keys, prompt, rename, or
+  wait-until-blocked. The bridge is plugin → extension only.
 - **Per-pane state rollup.** Herdr rolls status up to tabs/workspaces. Nerdr is a
   flat list (sorted attention-first).
 - **Socket API for agent-to-agent orchestration** (spawn panes, prompt each other,

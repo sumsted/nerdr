@@ -15,8 +15,6 @@ import type {
   AgentStatus,
   BridgeInfo,
   ClientMessage,
-  CommandResultMessage,
-  ServerCommand,
   ServerMessage,
 } from "@nerdr/protocol";
 
@@ -63,14 +61,8 @@ export class BridgeClient {
   private heartbeat?: NodeJS.Timeout;
   private reconnectTimer?: NodeJS.Timeout;
   private pending = new Map<string, ClientMessage>();
-  private commandHandler?: (command: ServerCommand) => void;
 
   constructor(private readonly identity: AgentIdentity) {}
-
-  /** Register the handler for command frames sent by the extension. */
-  setCommandHandler(handler: (command: ServerCommand) => void): void {
-    this.commandHandler = handler;
-  }
 
   start(): void {
     this.token = discoverBridge().token;
@@ -102,11 +94,6 @@ export class BridgeClient {
 
   ping(): void {
     this.send({ type: "ping", at: Date.now() });
-  }
-
-  /** Report the outcome of a command frame back to the extension. */
-  sendResult(result: Omit<CommandResultMessage, "type">): void {
-    this.send({ type: "command.result", ...result });
   }
 
   close(): void {
@@ -154,12 +141,6 @@ export class BridgeClient {
         if (message?.type === "error") {
           // Extension rejected us; nothing actionable beyond logging.
           console.error("[nerdr] bridge error:", message.message);
-        } else if (message?.type === "command") {
-          try {
-            this.commandHandler?.(message);
-          } catch (error) {
-            console.error("[nerdr] command handler failed:", String(error));
-          }
         }
       }
     });

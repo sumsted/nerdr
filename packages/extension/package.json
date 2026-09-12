@@ -59,11 +59,6 @@
         "title": "Nerdr: Test Bell"
       },
       {
-        "command": "nerdr.renameAgent",
-        "title": "Nerdr: Rename Agent",
-        "icon": "$(pencil)"
-      },
-      {
         "command": "nerdr.clearFinished",
         "title": "Nerdr: Clear Finished Agents"
       }
@@ -125,16 +120,6 @@
           "command": "nerdr.focusAgent",
           "when": "view == nerdr.agentsPanel && viewItem == nerdr.agent",
           "group": "inline"
-        },
-        {
-          "command": "nerdr.renameAgent",
-          "when": "view == nerdr.agents && viewItem == nerdr.agent",
-          "group": "inline@2"
-        },
-        {
-          "command": "nerdr.renameAgent",
-          "when": "view == nerdr.agentsPanel && viewItem == nerdr.agent",
-          "group": "inline@2"
         }
       ]
     },

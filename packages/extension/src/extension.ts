@@ -70,16 +70,6 @@ export function activate(context: vscode.ExtensionContext): void {
           store.markOffline(agentId);
         }
       },
-      onCommandResult: (result) => {
-        if (result.ok) {
-          log(`command ${result.command} ok for ${result.agentId} (${result.requestId})`);
-          return;
-        }
-        log(`command ${result.command} failed for ${result.agentId}: ${result.error}`);
-        void vscode.window.showWarningMessage(
-          `Nerdr: ${result.command} failed: ${result.error ?? "unknown error"}`,
-        );
-      },
     });
     context.subscriptions.push(server);
     try {
@@ -194,38 +184,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand("nerdr.testBell", () => {
       playBell(config.bellCommand, log);
-    }),
-
-    vscode.commands.registerCommand("nerdr.renameAgent", async (item?: AgentTreeItem) => {
-      const agent = item instanceof AgentTreeItem ? item.snapshot : undefined;
-      if (!agent) {
-        void vscode.window.showInformationMessage("Nerdr: select an agent to rename.");
-        return;
-      }
-      const title = await vscode.window.showInputBox({
-        prompt: `Rename agent "${agent.identity.title}"`,
-        value: agent.identity.title,
-        placeHolder: "New agent name",
-        validateInput: (value) => (value.trim() ? undefined : "Name cannot be empty"),
-      });
-      if (title === undefined) return;
-      const trimmed = title.trim();
-      if (!trimmed) return;
-      const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const sent = server?.sendToAgent(agent.identity.id, {
-        type: "command",
-        command: "rename",
-        agentId: agent.identity.id,
-        title: trimmed,
-        requestId,
-      });
-      if (!sent) {
-        void vscode.window.showWarningMessage(
-          `Nerdr: agent "${agent.identity.title}" is not connected.`,
-        );
-        return;
-      }
-      store.patchMeta(agent.identity.id, { title: trimmed });
     }),
 
     vscode.commands.registerCommand("nerdr.clearFinished", () => {

@@ -13,7 +13,8 @@ and limitations.
 - Bell tones when an agent needs attention (`blocked`/`error`), and on completion
   (`done`) for the `build`/`plan` agents
 - Click an agent (or run **Nerdr: Focus Agent Terminal**) to jump to its terminal
-- **Nerdr: Rename Agent** to set an agent's name (updates the real OpenCode session)
+- Agents are named after the workspace directory they were started in
+  (duplicates get a session slug suffix)
 
 Requires the matching OpenCode plugin: copy `nerdr.js` into
 `~/.config/opencode/plugins/` (see the root README).

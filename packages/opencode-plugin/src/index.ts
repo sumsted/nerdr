@@ -54,12 +54,18 @@ function questionLabel(properties: unknown): string {
  * lifecycle state for this OpenCode process. The unit of tracking is the
  * process (one terminal pane), matching Herdr's pane-oriented model.
  */
-export const NerdrPlugin: Plugin = async ({ directory, worktree, serverUrl, client }) => {
+export const NerdrPlugin: Plugin = async ({ directory, serverUrl, project }) => {
   const pid = process.pid;
+  // Name the agent after the workspace directory it was started in. This is not
+  // OpenCode's session title, which is auto-generated and can change once the
+  // first task completes.
+  const repoRoot = project?.worktree;
+  const worktree =
+    repoRoot && repoRoot !== "/" && repoRoot !== directory ? repoRoot : undefined;
   const identity: AgentIdentity = {
     id: `pid:${pid}`,
     pid,
-    title: basename(worktree || directory),
+    title: basename(directory),
     directory,
     worktree,
     serverUrl: serverUrl?.toString(),
@@ -70,53 +76,6 @@ export const NerdrPlugin: Plugin = async ({ directory, worktree, serverUrl, clie
 
   const bridge = new BridgeClient(identity);
   bridge.start();
-
-  let sessionID: string | undefined;
-
-  bridge.setCommandHandler(async (command) => {
-    if (command.command !== "rename") return;
-    if (!sessionID) {
-      bridge.sendResult({
-        command: "rename",
-        agentId: command.agentId,
-        requestId: command.requestId,
-        ok: false,
-        error: "no active session yet",
-      });
-      return;
-    }
-    try {
-      const result = await client.session.update({
-        path: { id: sessionID },
-        body: { title: command.title },
-      });
-      if (result.error) {
-        bridge.sendResult({
-          command: "rename",
-          agentId: command.agentId,
-          requestId: command.requestId,
-          ok: false,
-          error: errorText(result.error) ?? "rename failed",
-        });
-        return;
-      }
-      bridge.patchIdentity({ title: command.title });
-      bridge.sendResult({
-        command: "rename",
-        agentId: command.agentId,
-        requestId: command.requestId,
-        ok: true,
-      });
-    } catch (error) {
-      bridge.sendResult({
-        command: "rename",
-        agentId: command.agentId,
-        requestId: command.requestId,
-        ok: false,
-        error: errorText(error) ?? "rename failed",
-      });
-    }
-  });
 
   let lastStatus: AgentStatus = "idle";
   const setStatus = (status: AgentStatus, message?: string, lastEvent?: string) => {
@@ -157,16 +116,6 @@ export const NerdrPlugin: Plugin = async ({ directory, worktree, serverUrl, clie
         setStatus("blocked", typeof title === "string" ? title : "Permission needed", "permission.asked");
         return true;
       }
-      case "session.renamed": {
-        const p = e.properties as
-          | { title?: unknown; id?: unknown; sessionID?: unknown; info?: { title?: unknown; id?: unknown } }
-          | undefined;
-        const id = p?.sessionID ?? p?.id ?? p?.info?.id;
-        const title = p?.title ?? p?.info?.title;
-        if (typeof id === "string") sessionID = id;
-        if (typeof title === "string" && title) bridge.patchIdentity({ title });
-        return true;
-      }
       default:
         return false;
     }
@@ -179,12 +128,11 @@ export const NerdrPlugin: Plugin = async ({ directory, worktree, serverUrl, clie
         case "session.created":
         case "session.updated": {
           const info = event.properties.info;
-          sessionID = info.id;
+          const slug = (info as { slug?: unknown }).slug;
           setStatus(lastStatus, undefined, event.type);
           bridge.patchIdentity({
-            title: info.title || identity.title,
             sessionID: info.id,
-            directory: info.directory || identity.directory,
+            slug: typeof slug === "string" ? slug : undefined,
           });
           break;
         }
