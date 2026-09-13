@@ -235,39 +235,6 @@ The core four requirements are implemented. The following Herdr capabilities are
   without a plugin. Nerdr relies entirely on the plugin's lifecycle reports, so a
   bare `opencode` without the Nerdr plugin will not appear in the list.
 
-## Landing page
-
-A static, dark-themed landing page lives in [`site/`](site/). It is
-dependency-free (no CDN, no build step) and uses the Nerdr icon from
-`media/nerdr.svg` as its logo.
-
-Preview locally:
-
-```bash
-python3 -m http.server -d site 8080
-# then open http://localhost:8080
-```
-
-Deployment is handled by [`.github/workflows/pages.yml`](.github/workflows/pages.yml),
-which publishes the contents of `site/` to GitHub Pages on every push to `main`
-(or via manual dispatch).
-
-**One-time setup (required):** the default `GITHUB_TOKEN` cannot create a Pages
-site, so enable it in the UI first: **Settings → Pages → Build and deployment →
-Source: GitHub Actions**. If your repository is private, Pages also requires a
-paid plan (or make the repo public). After that, re-run the workflow.
-
-### Custom domain (`nerdr.dev`)
-
-1. **In GitHub:** Settings → Pages → Custom domain → enter `nerdr.dev` and save.
-   This writes a `CNAME` file into the published artifact.
-2. **At Namecheap (Advanced DNS):**
-   - `A` records for the apex `nerdr.dev` → `185.199.108.153`, `185.199.109.153`,
-     `185.199.110.153`, `185.199.111.153`.
-   - `CNAME` record for `www` → `<owner>.github.io` (your Pages host).
-3. Wait for DNS to propagate, then tick **Enforce HTTPS** once GitHub provisions
-   the certificate (can take up to 24h).
-
 ## License
 
 MIT — see [LICENSE](LICENSE).
