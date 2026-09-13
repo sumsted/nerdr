@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nerdr — Herdr-like agent awareness for OpenCode in VSCodium</title>
+  <meta name="description" content="Nerdr watches every OpenCode agent in your VSCodium terminals, shows what state each one is in, and rings a bell when one needs you." />
+  <meta name="color-scheme" content="dark" />
+  <meta property="og:title" content="Nerdr" />
+  <meta property="og:description" content="Herdr-like agent awareness for OpenCode agents running in VSCodium." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="#top" aria-label="Nerdr home">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="2.5" width="18" height="19" rx="6" />
+          <circle cx="8.8" cy="10.2" r="3.3" />
+          <circle cx="15.2" cy="10.2" r="3.3" />
+          <path d="M5.5 10.2H3.6" />
+          <path d="M18.5 10.2h1.9" />
+          <circle class="pupil" cx="8.8" cy="10.2" r="0.9" />
+          <circle class="pupil" cx="15.2" cy="10.2" r="0.9" />
+          <path d="M12 13.6v1.2" />
+          <path d="M9.4 16.6c0.7 0.9 4.5 0.9 5.2 0" />
+          <path d="M10.3 16.9h3.4v2.4h-3.4Z" />
+          <path d="M12 16.9v2.4" />
+        </svg>
+        <span class="brand-name">Nerdr</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#install">Install</a>
+        <a class="btn btn-ghost" href="https://github.com/your-org/nerdr">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero" id="top">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">OpenCode × VSCodium</p>
+          <h1>Know which agent<br />needs you.</h1>
+          <p class="lede">
+            Nerdr watches every OpenCode agent in your VSCodium terminals, shows
+            each one's state at a glance, and rings a bell when one blocks — or
+            when a <code>build</code>/<code>plan</code> agent finishes.
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="#install">Install</a>
+            <a class="btn btn-ghost" href="#how">See how it works</a>
+          </div>
+          <ul class="hero-points">
+            <li>Live roster in the activity bar &amp; bottom panel</li>
+            <li>Attention bells with per-agent cooldown</li>
+            <li>Click to jump to the owning terminal</li>
+          </ul>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <div class="window">
+            <div class="window-bar">
+              <span class="tl"></span><span class="tl"></span><span class="tl"></span>
+              <span class="window-title">Nerdr — Agents</span>
+            </div>
+            <ul class="agent-list">
+              <li class="agent is-working">
+                <span class="dot"></span>
+                <span class="agent-name">nerdr</span>
+                <span class="agent-meta">working</span>
+                <span class="spinner"></span>
+              </li>
+              <li class="agent is-blocked">
+                <span class="dot"></span>
+                <span class="agent-name">markets</span>
+                <span class="agent-meta">needs input</span>
+                <span class="bell">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a5 5 0 0 0-5 5v3.2L5.4 14.4A1 1 0 0 0 6.3 16h11.4a1 1 0 0 0 .9-1.6L17 11.2V8a5 5 0 0 0-5-5Z"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>
+                </span>
+              </li>
+              <li class="agent is-done">
+                <span class="dot"></span>
+                <span class="agent-name">3dworld</span>
+                <span class="agent-meta">done</span>
+              </li>
+              <li class="agent is-idle">
+                <span class="dot"></span>
+                <span class="agent-name">apicli</span>
+                <span class="agent-meta">idle</span>
+              </li>
+              <li class="agent is-error">
+                <span class="dot"></span>
+                <span class="agent-name">scratch</span>
+                <span class="agent-meta">error</span>
+              </li>
+            </ul>
+            <div class="window-foot">5 agents · 1 needs input · 1 working</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section" id="features">
+      <div class="container">
+        <h2 class="section-title">Built to stop the pane-by-pane hunt</h2>
+        <p class="section-sub">Everything you need to supervise multiple agents without babysitting terminals.</p>
+        <div class="cards">
+          <article class="card">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+            </span>
+            <h3>State detection</h3>
+            <p>Lifecycle events map to <code>working</code>, <code>blocked</code>, <code>idle</code>, <code>done</code>, and <code>error</code> in real time.</p>
+          </article>
+          <article class="card">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3a5 5 0 0 0-5 5v3.2L5.4 14.4A1 1 0 0 0 6.3 16h11.4a1 1 0 0 0 .9-1.6L17 11.2V8a5 5 0 0 0-5-5Z"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>
+            </span>
+            <h3>Attention bells</h3>
+            <p>A tone fires when an agent blocks or errors. Optionally ring when <code>build</code>/<code>plan</code> finishes, with a per-agent cooldown.</p>
+          </article>
+          <article class="card">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></svg>
+            </span>
+            <h3>Nerdr panel</h3>
+            <p>The roster lives in both the left activity bar and the bottom panel, sorted attention-first.</p>
+          </article>
+          <article class="card">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m8 10 2 2-2 2M13 14h3"/></svg>
+            </span>
+            <h3>Jump to terminal</h3>
+            <p>Click an agent, or run <em>Focus Agent Terminal</em>, and Nerdr reveals the terminal hosting it.</p>
+          </article>
+          <article class="card">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            </span>
+            <h3>Workspace naming</h3>
+            <p>Agents are named after the directory you started them in. Duplicates get a session-slug suffix.</p>
+          </article>
+          <article class="card">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
+            </span>
+            <h3>Local &amp; private</h3>
+            <p>State travels over a loopback socket with a per-run token. Nothing leaves your machine.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section section-alt" id="how">
+      <div class="container">
+        <h2 class="section-title">Two pieces, one loopback socket</h2>
+        <p class="section-sub">An OpenCode plugin streams lifecycle state; the VSCodium extension aggregates, renders, and rings.</p>
+
+        <div class="flow">
+          <div class="flow-node">
+            <h3>OpenCode plugin</h3>
+            <p>Hooks session, tool, permission, and question events, then reports state.</p>
+          </div>
+          <div class="flow-link"><span>state →</span></div>
+          <div class="flow-node flow-node-accent">
+            <h3>Nerdr extension</h3>
+            <p>Bridge server, agent store, roster panel, terminal matcher, and the bell.</p>
+          </div>
+        </div>
+
+        <ol class="steps">
+          <li><span class="step-num">1</span><div><h4>Run OpenCode</h4><p>Start agents in your VSCodium integrated terminals, as usual.</p></div></li>
+          <li><span class="step-num">2</span><div><h4>Watch the roster</h4><p>Each agent appears with a live state and, when needed, a bell.</p></div></li>
+          <li><span class="step-num">3</span><div><h4>Act fast</h4><p>Click the blocked agent and answer it — no pane-by-pane hunting.</p></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section class="section" id="install">
+      <div class="container">
+        <h2 class="section-title">Install</h2>
+        <p class="section-sub">Requires Node 18+, VSCodium 1.85+, and the OpenCode CLI.</p>
+
+        <div class="install-grid">
+          <div class="install-block">
+            <h3>1 · VSCodium extension</h3>
+            <pre><code><span class="c-dim"># build and package</span>
+npm install &amp;&amp; npm run build
+npm run package -w nerdr
+
+<span class="c-dim"># install the VSIX</span>
+codium --install-extension packages/extension/nerdr-0.1.1.vsix</code></pre>
+          </div>
+          <div class="install-block">
+            <h3>2 · OpenCode plugin</h3>
+            <pre><code><span class="c-dim"># copy the standalone bundle</span>
+mkdir -p ~/.config/opencode/plugins
+cp packages/opencode-plugin/dist/nerdr.js \
+   ~/.config/opencode/plugins/nerdr.js</code></pre>
+          </div>
+        </div>
+
+        <div class="install-note">
+          <p>Then reload the VSCodium window and restart <code>opencode</code> so the plugin loads.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="section section-alt" id="settings">
+      <div class="container">
+        <h2 class="section-title">Tune the bells</h2>
+        <p class="section-sub">Sensible defaults; adjust in VSCodium settings or <code>settings.json</code>.</p>
+        <pre class="settings-code"><code>{
+  <span class="c-key">"nerdr.bell.enabled"</span>: <span class="c-bool">true</span>,
+  <span class="c-key">"nerdr.bell.states"</span>: [<span class="c-str">"blocked"</span>, <span class="c-str">"error"</span>, <span class="c-str">"done"</span>],
+  <span class="c-key">"nerdr.bell.agents"</span>: [<span class="c-str">"build"</span>, <span class="c-str">"plan"</span>],
+  <span class="c-key">"nerdr.bell.cooldownMs"</span>: <span class="c-num">5000</span>
+}</code></pre>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="2.5" width="18" height="19" rx="6" />
+          <circle cx="8.8" cy="10.2" r="3.3" />
+          <circle cx="15.2" cy="10.2" r="3.3" />
+          <path d="M5.5 10.2H3.6" />
+          <path d="M18.5 10.2h1.9" />
+          <circle class="pupil" cx="8.8" cy="10.2" r="0.9" />
+          <circle class="pupil" cx="15.2" cy="10.2" r="0.9" />
+          <path d="M12 13.6v1.2" />
+          <path d="M9.4 16.6c0.7 0.9 4.5 0.9 5.2 0" />
+          <path d="M10.3 16.9h3.4v2.4h-3.4Z" />
+          <path d="M12 16.9v2.4" />
+        </svg>
+        <span>Nerdr</span>
+      </div>
+      <p class="footer-note">Herdr-like agent awareness for OpenCode in VSCodium. MIT licensed.</p>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/your-org/nerdr">GitHub</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    // Copy buttons are future-friendly; nav smooth-scroll is native via CSS.
+    document.querySelectorAll('a[href^="#"]').forEach(function (link) {
+      link.addEventListener('click', function (event) {
+        var id = link.getAttribute('href');
+        if (id.length > 1 && document.querySelector(id)) {
+          event.preventDefault();
+          document.querySelector(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+          history.replaceState(null, '', id);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

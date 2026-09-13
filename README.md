@@ -235,6 +235,27 @@ The core four requirements are implemented. The following Herdr capabilities are
   without a plugin. Nerdr relies entirely on the plugin's lifecycle reports, so a
   bare `opencode` without the Nerdr plugin will not appear in the list.
 
+## Landing page
+
+A static, dark-themed landing page lives in [`site/`](site/). It is
+dependency-free (no CDN, no build step) and uses the Nerdr icon from
+`media/nerdr.svg` as its logo.
+
+Preview locally:
+
+```bash
+python3 -m http.server -d site 8080
+# then open http://localhost:8080
+```
+
+Deployment is handled by [`.github/workflows/pages.yml`](.github/workflows/pages.yml),
+which publishes the contents of `site/` to GitHub Pages on every push to `main`
+(or via manual dispatch). In the repository settings, set **Pages → Build and
+deployment → Source** to **GitHub Actions**.
+
+Before publishing, replace the placeholder GitHub URLs in `site/index.html`
+(`https://github.com/your-org/nerdr`) with the real repository URL.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
