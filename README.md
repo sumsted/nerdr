@@ -59,7 +59,7 @@ Package the extension:
 
 ```bash
 npm run package -w nerdr
-# -> packages/extension/nerdr-0.1.0.vsix
+# -> packages/extension/nerdr-0.1.1.vsix
 ```
 
 Then install the VSIX, either from the VSCodium UI
@@ -68,14 +68,14 @@ Then install the VSIX, either from the VSCodium UI
 ```bash
 # macOS (bundled CLI path)
 "/Applications/VSCodium.app/Contents/Resources/app/bin/codium" \
-  --install-extension packages/extension/nerdr-0.1.0.vsix
+  --install-extension packages/extension/nerdr-0.1.1.vsix
 
 # Linux
-codium --install-extension packages/extension/nerdr-0.1.0.vsix
+codium --install-extension packages/extension/nerdr-0.1.1.vsix
 
 # Windows (PowerShell)
 & "$env:LOCALAPPDATA\Programs\VSCodium\bin\codium.cmd" `
-  --install-extension packages\extension\nerdr-0.1.0.vsix
+  --install-extension packages\extension\nerdr-0.1.1.vsix
 ```
 
 If `codium` is not on your `PATH`, run **"Shell Command: Install 'codium'

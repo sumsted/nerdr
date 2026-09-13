@@ -2,9 +2,10 @@
   "name": "nerdr",
   "displayName": "Nerdr",
   "description": "Herdr-like awareness for OpenCode agents running in VSCodium terminals.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "nerdr",
   "license": "MIT",
+  "icon": "media/nerdr.png",
   "engines": {
     "vscode": "^1.85.0"
   },
