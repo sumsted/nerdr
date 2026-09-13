@@ -250,13 +250,12 @@ python3 -m http.server -d site 8080
 
 Deployment is handled by [`.github/workflows/pages.yml`](.github/workflows/pages.yml),
 which publishes the contents of `site/` to GitHub Pages on every push to `main`
-(or via manual dispatch). The workflow calls `configure-pages` with
-`enablement: true`, so it will create and configure the Pages site (source:
-**GitHub Actions**) on the first run.
+(or via manual dispatch).
 
-If the run still fails with `Get Pages site failed ... Not Found`, enable it once
-manually: **Settings → Pages → Build and deployment → Source: GitHub Actions**,
-then re-run the workflow.
+**One-time setup (required):** the default `GITHUB_TOKEN` cannot create a Pages
+site, so enable it in the UI first: **Settings → Pages → Build and deployment →
+Source: GitHub Actions**. If your repository is private, Pages also requires a
+paid plan (or make the repo public). After that, re-run the workflow.
 
 ### Custom domain (`nerdr.dev`)
 
