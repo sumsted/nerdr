@@ -250,11 +250,24 @@ python3 -m http.server -d site 8080
 
 Deployment is handled by [`.github/workflows/pages.yml`](.github/workflows/pages.yml),
 which publishes the contents of `site/` to GitHub Pages on every push to `main`
-(or via manual dispatch). In the repository settings, set **Pages → Build and
-deployment → Source** to **GitHub Actions**.
+(or via manual dispatch). The workflow calls `configure-pages` with
+`enablement: true`, so it will create and configure the Pages site (source:
+**GitHub Actions**) on the first run.
 
-Before publishing, replace the placeholder GitHub URLs in `site/index.html`
-(`https://github.com/your-org/nerdr`) with the real repository URL.
+If the run still fails with `Get Pages site failed ... Not Found`, enable it once
+manually: **Settings → Pages → Build and deployment → Source: GitHub Actions**,
+then re-run the workflow.
+
+### Custom domain (`nerdr.dev`)
+
+1. **In GitHub:** Settings → Pages → Custom domain → enter `nerdr.dev` and save.
+   This writes a `CNAME` file into the published artifact.
+2. **At Namecheap (Advanced DNS):**
+   - `A` records for the apex `nerdr.dev` → `185.199.108.153`, `185.199.109.153`,
+     `185.199.110.153`, `185.199.111.153`.
+   - `CNAME` record for `www` → `<owner>.github.io` (your Pages host).
+3. Wait for DNS to propagate, then tick **Enforce HTTPS** once GitHub provisions
+   the certificate (can take up to 24h).
 
 ## License
 
