@@ -31,7 +31,9 @@ function statusIcon(agent: AgentSnapshot): vscode.ThemeIcon {
     case "working":
       return new vscode.ThemeIcon("sync~spin", new vscode.ThemeColor("charts.green"));
     case "done":
-      return new vscode.ThemeIcon("pass", new vscode.ThemeColor("charts.blue"));
+      return agent.unseenDone
+        ? new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("charts.purple"))
+        : new vscode.ThemeIcon("pass", new vscode.ThemeColor("charts.blue"));
     case "idle":
       return new vscode.ThemeIcon("circle-outline");
     default:
@@ -42,12 +44,17 @@ function statusIcon(agent: AgentSnapshot): vscode.ThemeIcon {
 export class AgentTreeItem extends vscode.TreeItem {
   constructor(readonly snapshot: AgentSnapshot, label: string = snapshot.identity.title) {
     super(label, vscode.TreeItemCollapsibleState.None);
+    const unseen = snapshot.online && snapshot.status === "done" && snapshot.unseenDone === true;
     const detail = snapshot.online ? STATUS_LABEL[snapshot.status] : "offline";
+    const flag = unseen ? " · new" : "";
     const message = snapshot.message ? ` · ${snapshot.message}` : "";
-    this.description = `${detail}${message}`;
+    this.description = `${detail}${flag}${message}`;
     this.id = snapshot.identity.id;
     this.contextValue = "nerdr.agent";
     this.iconPath = statusIcon(snapshot);
+    if (unseen && label.length > 0) {
+      this.label = { label, highlights: [[0, label.length - 1]] };
+    }
     this.tooltip = this.buildTooltip(snapshot);
     this.command = {
       command: "nerdr.focusAgent",

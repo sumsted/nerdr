@@ -24,6 +24,7 @@ export class AgentStore implements vscode.Disposable {
       updatedAt: now,
       lastEvent: snapshot.lastEvent,
       online: true,
+      unseenDone: false,
     });
     this.fire();
   }
@@ -37,13 +38,33 @@ export class AgentStore implements vscode.Disposable {
   ): void {
     const agent = this.agents.get(agentId);
     if (!agent) return;
+    const previous = agent.status;
     agent.status = status;
     agent.message = message;
     agent.attention = attention ?? (status === "blocked" || status === "error");
     agent.lastEvent = lastEvent;
     agent.updatedAt = Date.now();
     agent.online = true;
+    if (status === "done") {
+      if (previous !== "done") agent.unseenDone = true;
+    } else {
+      agent.unseenDone = false;
+    }
     this.fire();
+  }
+
+  /** Clear the "unseen done" highlight for one agent, or all when omitted. */
+  markSeen(agentId?: string): number {
+    const targets = agentId ? [this.agents.get(agentId)] : [...this.agents.values()];
+    let cleared = 0;
+    for (const agent of targets) {
+      if (agent?.unseenDone) {
+        agent.unseenDone = false;
+        cleared += 1;
+      }
+    }
+    if (cleared) this.fire();
+    return cleared;
   }
 
   patchMeta(agentId: string, patch: Partial<AgentIdentity>): void {

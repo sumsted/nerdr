@@ -62,6 +62,11 @@
       {
         "command": "nerdr.clearFinished",
         "title": "Nerdr: Clear Finished Agents"
+      },
+      {
+        "command": "nerdr.markAllSeen",
+        "title": "Nerdr: Mark All Finished as Seen",
+        "icon": "$(check-all)"
       }
     ],
     "viewsContainers": {
@@ -107,6 +112,11 @@
         },
         {
           "command": "nerdr.clearFinished",
+          "when": "view == nerdr.agents || view == nerdr.agentsPanel",
+          "group": "navigation"
+        },
+        {
+          "command": "nerdr.markAllSeen",
           "when": "view == nerdr.agents || view == nerdr.agentsPanel",
           "group": "navigation"
         }

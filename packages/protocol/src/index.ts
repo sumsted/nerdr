@@ -99,6 +99,11 @@ export interface AgentSnapshot {
   /** Last raw OpenCode event type that drove a state change. */
   lastEvent?: string;
   /**
+   * True when the agent finished its turn and the user has not yet focused it.
+   * View-only state owned by the extension; not sent over the bridge.
+   */
+  unseenDone?: boolean;
+  /**
    * Whether the bridge currently has a live socket for this agent. Set by the
    * extension; `false` means the process exited or went silent.
    */

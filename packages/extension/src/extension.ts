@@ -33,8 +33,15 @@ export function activate(context: vscode.ExtensionContext): void {
       treeDataProvider: provider,
       showCollapseAll: false,
     });
+    context.subscriptions.push(
+      view,
+      view.onDidChangeSelection((event) => {
+        for (const item of event.selection) {
+          if (item instanceof AgentTreeItem) store.markSeen(item.snapshot.identity.id);
+        }
+      }),
+    );
     treeViews.push(view);
-    context.subscriptions.push(view);
   }
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -180,10 +187,16 @@ export function activate(context: vscode.ExtensionContext): void {
           `Nerdr: could not find a terminal for "${agent.identity.title}" (pid ${agent.identity.pid}).`,
         );
       }
+      store.markSeen(agent.identity.id);
     }),
 
     vscode.commands.registerCommand("nerdr.testBell", () => {
       playBell(config.bellCommand, log);
+    }),
+
+    vscode.commands.registerCommand("nerdr.markAllSeen", () => {
+      const cleared = store.markSeen();
+      log(`marked ${cleared} finished agent(s) as seen`);
     }),
 
     vscode.commands.registerCommand("nerdr.clearFinished", () => {
