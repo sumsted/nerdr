@@ -259,23 +259,30 @@ export function activate(context: vscode.ExtensionContext): void {
       });
       if (token === undefined) return;
 
+      const OFFLINE_OPTION = "offline";
       const states: AgentStatus[] = ["working", "blocked", "idle", "done", "error", "unknown"];
       const picks = await vscode.window.showQuickPick(
-        states.map((state) => ({
-          label: state,
-          picked: config.webhookStates.includes(state),
-        })),
+        [
+          ...states.map((state) => ({
+            label: state,
+            picked: config.webhookStates.includes(state),
+          })),
+          { label: OFFLINE_OPTION, picked: config.webhookNotifyOffline },
+        ],
         {
           title: "Nerdr Webhook",
-          placeHolder: "Statuses that trigger a notification",
+          placeHolder: "Events that trigger a notification",
           canPickMany: true,
           ignoreFocusOut: true,
         },
       );
       if (picks === undefined) return;
-      const chosen = picks.map((pick) => pick.label as AgentStatus);
-      if (chosen.length === 0) {
-        void vscode.window.showWarningMessage("Nerdr: choose at least one status.");
+      const chosen = picks
+        .map((pick) => pick.label)
+        .filter((label): label is AgentStatus => label !== OFFLINE_OPTION);
+      const notifyOffline = picks.some((pick) => pick.label === OFFLINE_OPTION);
+      if (chosen.length === 0 && !notifyOffline) {
+        void vscode.window.showWarningMessage("Nerdr: choose at least one event.");
         return;
       }
 
@@ -283,6 +290,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const finalToken = token.trim();
       await cfg.update("webhook.url", finalUrl, vscode.ConfigurationTarget.Global);
       await cfg.update("webhook.states", chosen, vscode.ConfigurationTarget.Global);
+      await cfg.update("webhook.notifyOffline", notifyOffline, vscode.ConfigurationTarget.Global);
       if (finalToken) await context.secrets.store("nerdr.webhook.token", finalToken);
       else await context.secrets.delete("nerdr.webhook.token");
 

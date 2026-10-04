@@ -207,7 +207,7 @@ test message. The webhook is enabled only after a successful test.
 | `nerdr.webhook.url` | `""` | Endpoint that receives the POST |
 | `nerdr.webhook.states` | `["blocked","error","done"]` | Which states notify |
 | `nerdr.webhook.cooldownMs` | `5000` | Minimum gap between POSTs per agent |
-| `nerdr.webhook.notifyOffline` | `true` | Also notify when an agent goes offline |
+| `nerdr.webhook.notifyOffline` | `true` | Also notify when an agent goes offline (toggle in the configure wizard) |
 | `nerdr.webhook.includeDetail` | `true` | Append the short detail (e.g. permission title) |
 
 The bearer token is stored in VS Code **SecretStorage**, not in `settings.json`.

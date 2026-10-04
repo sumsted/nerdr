@@ -20,7 +20,8 @@ import type {
 
 const HEARTBEAT_MS = 15_000;
 const RECONNECT_MIN_MS = 1_000;
-const RECONNECT_MAX_MS = 20_000;
+const RECONNECT_MAX_MS = 10_000;
+const HANDSHAKE_TIMEOUT_MS = 5_000;
 
 function nerdrHome(): string {
   return process.env.NERDR_HOME || path.join(os.homedir(), BRIDGE_DIRNAME);
@@ -56,16 +57,17 @@ export class BridgeClient {
   private buffer = "";
   private connected = false;
   private closed = false;
+  private welcomed = false;
   private token?: string;
   private reconnectDelay = RECONNECT_MIN_MS;
   private heartbeat?: NodeJS.Timeout;
   private reconnectTimer?: NodeJS.Timeout;
+  private handshakeTimer?: NodeJS.Timeout;
   private pending = new Map<string, ClientMessage>();
 
   constructor(private readonly identity: AgentIdentity) {}
 
   start(): void {
-    this.token = discoverBridge().token;
     this.connect();
     this.heartbeat = setInterval(() => this.send({ type: "ping", at: Date.now() }), HEARTBEAT_MS);
     this.heartbeat.unref?.();
@@ -101,6 +103,7 @@ export class BridgeClient {
     this.closed = true;
     if (this.heartbeat) clearInterval(this.heartbeat);
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.handshakeTimer) clearTimeout(this.handshakeTimer);
     this.write({ type: "bye", agentId: this.identity.id });
     try {
       this.socket?.end();
@@ -111,7 +114,10 @@ export class BridgeClient {
 
   private connect(): void {
     if (this.closed) return;
-    const { port } = discoverBridge();
+    // Re-read discovery on every attempt: the extension rotates its token (and
+    // occasionally its port) each time it activates.
+    const { port, token } = discoverBridge();
+    if (token) this.token = token;
     const socket = net.connect({ host: "127.0.0.1", port });
     this.socket = socket;
     socket.setNoDelay(true);
@@ -119,7 +125,7 @@ export class BridgeClient {
 
     socket.on("connect", () => {
       this.connected = true;
-      this.reconnectDelay = RECONNECT_MIN_MS;
+      this.welcomed = false;
       this.buffer = "";
       this.write({
         type: "hello",
@@ -129,6 +135,17 @@ export class BridgeClient {
         snapshot: { status: "idle", lastEvent: "plugin.init" },
       });
       this.flush();
+      // If the server does not acknowledge with `welcome`, force a retry rather
+      // than sitting on a half-open connection.
+      this.handshakeTimer = setTimeout(() => {
+        this.handshakeTimer = undefined;
+        try {
+          socket.destroy();
+        } catch {
+          // ignore
+        }
+      }, HANDSHAKE_TIMEOUT_MS);
+      this.handshakeTimer.unref?.();
     });
 
     socket.on("data", (chunk) => {
@@ -138,9 +155,22 @@ export class BridgeClient {
         const line = this.buffer.slice(0, index);
         this.buffer = this.buffer.slice(index + 1);
         const message = parseMessage<ServerMessage>(line);
-        if (message?.type === "error") {
-          // Extension rejected us; nothing actionable beyond logging.
+        if (message?.type === "welcome") {
+          this.welcomed = true;
+          this.reconnectDelay = RECONNECT_MIN_MS;
+          if (this.handshakeTimer) {
+            clearTimeout(this.handshakeTimer);
+            this.handshakeTimer = undefined;
+          }
+        } else if (message?.type === "error") {
+          // Rejected (e.g. stale token); drop the socket so we re-discover and
+          // reconnect with the current credentials.
           console.error("[nerdr] bridge error:", message.message);
+          try {
+            socket.destroy();
+          } catch {
+            // ignore
+          }
         }
       }
     });
@@ -151,7 +181,17 @@ export class BridgeClient {
 
     socket.on("close", () => {
       this.connected = false;
-      if (!this.closed) this.scheduleReconnect();
+      if (this.handshakeTimer) {
+        clearTimeout(this.handshakeTimer);
+        this.handshakeTimer = undefined;
+      }
+      if (!this.closed) {
+        // A previously healthy connection (e.g. the extension host reloaded)
+        // should retry quickly rather than inherit a long backoff.
+        if (this.welcomed) this.reconnectDelay = RECONNECT_MIN_MS;
+        this.welcomed = false;
+        this.scheduleReconnect();
+      }
     });
   }
 

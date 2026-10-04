@@ -123,6 +123,13 @@ export class BridgeServer implements vscode.Disposable {
       case "hello": {
         if (message.token && message.token !== this.token) {
           this.send(id, { type: "error", message: "invalid token" });
+          // Close so the client re-discovers the (rotated) token and reconnects.
+          const rejected = this.clients.get(id);
+          try {
+            rejected?.socket.end();
+          } catch {
+            // ignore
+          }
           return;
         }
         const state = this.clients.get(id);
