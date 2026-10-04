@@ -7,6 +7,12 @@ import { BridgeServer } from "./server.js";
 import { TerminalLocator } from "./terminalLocator.js";
 import { playBell } from "./bell.js";
 import { AgentTreeItem, AgentsProvider } from "./agentsProvider.js";
+import {
+  WebhookNotifier,
+  postWebhook,
+  webhookTestMessage,
+  type WebhookSettings,
+} from "./webhook.js";
 
 const VIEW_IDS = ["nerdr.agents", "nerdr.agentsPanel"];
 const STALE_CHECK_MS = 10_000;
@@ -26,6 +32,22 @@ export function activate(context: vscode.ExtensionContext): void {
   const provider = new AgentsProvider(() => store.list());
   const locator = new TerminalLocator(log);
   locator.watch();
+
+  const webhookSettings = (): WebhookSettings => ({
+    enabled: config.webhookEnabled,
+    url: config.webhookUrl,
+    states: config.webhookStates,
+    cooldownMs: config.webhookCooldownMs,
+    notifyOffline: config.webhookNotifyOffline,
+    includeDetail: config.webhookIncludeDetail,
+  });
+  const webhook = new WebhookNotifier(
+    () => store.list(),
+    webhookSettings,
+    () => context.secrets.get("nerdr.webhook.token"),
+    log,
+    (message) => void vscode.window.showWarningMessage(message),
+  );
 
   const treeViews: vscode.TreeView<AgentTreeItem>[] = [];
   for (const viewId of VIEW_IDS) {
@@ -149,6 +171,7 @@ export function activate(context: vscode.ExtensionContext): void {
       renderStatusBar();
       updateEmptyMessage();
       evaluateBells();
+      webhook.evaluate();
     }),
   );
 
@@ -203,6 +226,134 @@ export function activate(context: vscode.ExtensionContext): void {
       const removed = store.clearFinished();
       log(`cleared ${removed} finished agent(s)`);
     }),
+
+    vscode.commands.registerCommand("nerdr.webhook.configure", async () => {
+      const cfg = vscode.workspace.getConfiguration("nerdr");
+      const url = await vscode.window.showInputBox({
+        title: "Nerdr Webhook",
+        prompt: "Webhook URL that will receive POST notifications",
+        value: config.webhookUrl,
+        placeHolder: "https://relay.example.com/nerdr",
+        ignoreFocusOut: true,
+        validateInput: (value) => {
+          const trimmed = value.trim();
+          if (!trimmed) return "A URL is required.";
+          try {
+            const parsed = new URL(trimmed);
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+              return "Must be an http(s) URL.";
+            }
+          } catch {
+            return "Not a valid URL.";
+          }
+          return undefined;
+        },
+      });
+      if (url === undefined) return;
+
+      const token = await vscode.window.showInputBox({
+        title: "Nerdr Webhook",
+        prompt: "Bearer token sent in the Authorization header (optional)",
+        password: true,
+        ignoreFocusOut: true,
+      });
+      if (token === undefined) return;
+
+      const states: AgentStatus[] = ["working", "blocked", "idle", "done", "error", "unknown"];
+      const picks = await vscode.window.showQuickPick(
+        states.map((state) => ({
+          label: state,
+          picked: config.webhookStates.includes(state),
+        })),
+        {
+          title: "Nerdr Webhook",
+          placeHolder: "Statuses that trigger a notification",
+          canPickMany: true,
+          ignoreFocusOut: true,
+        },
+      );
+      if (picks === undefined) return;
+      const chosen = picks.map((pick) => pick.label as AgentStatus);
+      if (chosen.length === 0) {
+        void vscode.window.showWarningMessage("Nerdr: choose at least one status.");
+        return;
+      }
+
+      const finalUrl = url.trim();
+      const finalToken = token.trim();
+      await cfg.update("webhook.url", finalUrl, vscode.ConfigurationTarget.Global);
+      await cfg.update("webhook.states", chosen, vscode.ConfigurationTarget.Global);
+      if (finalToken) await context.secrets.store("nerdr.webhook.token", finalToken);
+      else await context.secrets.delete("nerdr.webhook.token");
+
+      const result = await postWebhook({
+        url: finalUrl,
+        token: finalToken || undefined,
+        message: webhookTestMessage(),
+      });
+      if (result.ok) {
+        await cfg.update("webhook.enabled", true, vscode.ConfigurationTarget.Global);
+        log(`webhook: configured, test delivered (${result.status})`);
+        void vscode.window.showInformationMessage(
+          `Nerdr: webhook configured — test delivered (HTTP ${result.status ?? "ok"}).`,
+        );
+      } else {
+        await cfg.update("webhook.enabled", false, vscode.ConfigurationTarget.Global);
+        log(`webhook: test failed: ${result.error ?? `HTTP ${result.status}`}`);
+        void vscode.window.showErrorMessage(
+          `Nerdr: webhook test failed — ${result.error ?? `HTTP ${result.status}`}. Webhook left disabled.`,
+        );
+      }
+    }),
+
+    vscode.commands.registerCommand("nerdr.webhook.test", async () => {
+      const current = readConfig();
+      if (!current.webhookUrl) {
+        void vscode.window.showWarningMessage(
+          "Nerdr: set a webhook URL first (Nerdr: Configure Webhook).",
+        );
+        return;
+      }
+      const token = await context.secrets.get("nerdr.webhook.token");
+      const result = await postWebhook({
+        url: current.webhookUrl,
+        token,
+        message: webhookTestMessage(),
+      });
+      if (result.ok) {
+        log(`webhook: test delivered (${result.status})`);
+        void vscode.window.showInformationMessage(
+          `Nerdr: webhook test delivered (HTTP ${result.status ?? "ok"}).`,
+        );
+      } else {
+        log(`webhook: test failed: ${result.error ?? `HTTP ${result.status}`}`);
+        void vscode.window.showErrorMessage(
+          `Nerdr: webhook test failed — ${result.error ?? `HTTP ${result.status}`}.`,
+        );
+      }
+    }),
+
+    vscode.commands.registerCommand("nerdr.webhook.setToken", async () => {
+      const token = await vscode.window.showInputBox({
+        title: "Nerdr Webhook",
+        prompt: "Bearer token (leave empty to clear)",
+        password: true,
+        ignoreFocusOut: true,
+      });
+      if (token === undefined) return;
+      if (token.trim()) {
+        await context.secrets.store("nerdr.webhook.token", token.trim());
+        void vscode.window.showInformationMessage("Nerdr: webhook token saved.");
+      } else {
+        await context.secrets.delete("nerdr.webhook.token");
+        void vscode.window.showInformationMessage("Nerdr: webhook token cleared.");
+      }
+    }),
+
+    vscode.commands.registerCommand("nerdr.webhook.clearToken", async () => {
+      await context.secrets.delete("nerdr.webhook.token");
+      void vscode.window.showInformationMessage("Nerdr: webhook token cleared.");
+    }),
   );
 
   context.subscriptions.push(
@@ -217,7 +368,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  context.subscriptions.push(store, provider, locator);
+  context.subscriptions.push(store, provider, locator, webhook);
   context.subscriptions.push({ dispose: () => server?.dispose() });
 
   renderStatusBar();

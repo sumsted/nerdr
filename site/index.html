@@ -62,6 +62,7 @@
           <ul class="hero-points">
             <li>Live roster in the activity bar &amp; bottom panel</li>
             <li>Attention bells with per-agent cooldown</li>
+            <li>Webhook alerts to your own relay (Telegram, email, SMS)</li>
             <li>Click to jump to the owning terminal</li>
           </ul>
         </div>
@@ -127,7 +128,7 @@
               <svg viewBox="0 0 24 24"><path d="M12 3a5 5 0 0 0-5 5v3.2L5.4 14.4A1 1 0 0 0 6.3 16h11.4a1 1 0 0 0 .9-1.6L17 11.2V8a5 5 0 0 0-5-5Z"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>
             </span>
             <h3>Attention bells</h3>
-            <p>A tone fires when an agent blocks or errors. Optionally ring when <code>build</code>/<code>plan</code> finishes, with a per-agent cooldown.</p>
+            <p>Rings a tone and POSTs to your webhook when an agent blocks, errors, or finishes.</p>
           </article>
           <article class="card">
             <span class="card-icon" aria-hidden="true">

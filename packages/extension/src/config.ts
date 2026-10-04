@@ -11,6 +11,12 @@ export interface NerdrConfig {
   bellCooldownMs: number;
   showStatusBar: boolean;
   staleTimeoutMs: number;
+  webhookEnabled: boolean;
+  webhookUrl: string;
+  webhookStates: AgentStatus[];
+  webhookCooldownMs: number;
+  webhookNotifyOffline: boolean;
+  webhookIncludeDetail: boolean;
 }
 
 const VALID_STATES: AgentStatus[] = [
@@ -32,6 +38,10 @@ export function readConfig(): NerdrConfig {
     .get<string[]>("bell.agents", ["build", "plan"])
     .map((name) => name.trim())
     .filter(Boolean);
+  const rawWebhookStates = cfg.get<string[]>("webhook.states", ["blocked", "error", "done"]);
+  const webhookStates = rawWebhookStates.filter((state): state is AgentStatus =>
+    (VALID_STATES as string[]).includes(state),
+  );
   return {
     port: cfg.get<number>("port", 27182),
     bellEnabled: cfg.get<boolean>("bell.enabled", true),
@@ -41,5 +51,11 @@ export function readConfig(): NerdrConfig {
     bellCooldownMs: Math.max(0, cfg.get<number>("bell.cooldownMs", 5000)),
     showStatusBar: cfg.get<boolean>("showStatusBar", true),
     staleTimeoutMs: Math.max(5000, cfg.get<number>("staleTimeoutMs", 45000)),
+    webhookEnabled: cfg.get<boolean>("webhook.enabled", false),
+    webhookUrl: cfg.get<string>("webhook.url", "").trim(),
+    webhookStates: webhookStates.length ? webhookStates : ["blocked", "error", "done"],
+    webhookCooldownMs: Math.max(0, cfg.get<number>("webhook.cooldownMs", 5000)),
+    webhookNotifyOffline: cfg.get<boolean>("webhook.notifyOffline", true),
+    webhookIncludeDetail: cfg.get<boolean>("webhook.includeDetail", true),
   };
 }

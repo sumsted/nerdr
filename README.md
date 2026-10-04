@@ -190,6 +190,46 @@ panel (Nerdr container) so it can live wherever you prefer.
 Platform defaults for `nerdr.bell.command` when left empty: `afplay` on macOS,
 `paplay`/terminal bell on Linux, and a PowerShell beep on Windows.
 
+## Webhooks
+
+Nerdr can POST a one-line notification to any HTTP endpoint when an agent changes
+state — handy for relaying to Telegram, email, SMS, or a dashboard. Nerdr does
+**not** talk to those services directly; point it at your own relay and let that
+fan out.
+
+**Setup:** run **Nerdr: Configure Webhook** from the Command Palette. It prompts
+for the URL, an optional bearer token, and which states to report, then sends a
+test message. The webhook is enabled only after a successful test.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `nerdr.webhook.enabled` | `false` | Master switch (set by the configure command) |
+| `nerdr.webhook.url` | `""` | Endpoint that receives the POST |
+| `nerdr.webhook.states` | `["blocked","error","done"]` | Which states notify |
+| `nerdr.webhook.cooldownMs` | `5000` | Minimum gap between POSTs per agent |
+| `nerdr.webhook.notifyOffline` | `true` | Also notify when an agent goes offline |
+| `nerdr.webhook.includeDetail` | `true` | Append the short detail (e.g. permission title) |
+
+The bearer token is stored in VS Code **SecretStorage**, not in `settings.json`.
+Use **Nerdr: Set Webhook Token** / **Nerdr: Clear Webhook Token** to change it, and
+**Nerdr: Test Webhook** to re-test at any time.
+
+### Request format
+
+The body is a JSON object with a single `message` field, one notification per POST:
+
+```json
+{ "message": "nerdr is done at 00:00" }
+{ "message": "konspt is asking a question at 00:00 — Allow bash: rm -rf node_modules?" }
+{ "message": "markets errored at 00:00 — retrying (attempt 2): rate limit" }
+{ "message": "nerdr went offline at 00:00" }
+```
+
+Headers: `Content-Type: application/json; charset=utf-8`, `User-Agent: nerdr`, and
+`Authorization: Bearer <token>` when a token is set. Sends are serialized to
+preserve order and retried on failure; the UI is never blocked, and repeated
+failures (5+) surface one warning.
+
 ## How terminal matching works
 
 `TerminalLocator` reads the OS process table (`ps -Ao pid=,ppid=,tty=`) and walks

@@ -67,6 +67,24 @@
         "command": "nerdr.markAllSeen",
         "title": "Nerdr: Mark All Finished as Seen",
         "icon": "$(check-all)"
+      },
+      {
+        "command": "nerdr.webhook.configure",
+        "title": "Nerdr: Configure Webhook",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "nerdr.webhook.test",
+        "title": "Nerdr: Test Webhook",
+        "icon": "$(send)"
+      },
+      {
+        "command": "nerdr.webhook.setToken",
+        "title": "Nerdr: Set Webhook Token"
+      },
+      {
+        "command": "nerdr.webhook.clearToken",
+        "title": "Nerdr: Clear Webhook Token"
       }
     ],
     "viewsContainers": {
@@ -197,6 +215,51 @@
           "type": "number",
           "default": 45000,
           "description": "Mark an agent offline when no bridge message is received within this window."
+        },
+        "nerdr.webhook.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "POST agent status notifications to `nerdr.webhook.url`. Configure with the **Nerdr: Configure Webhook** command."
+        },
+        "nerdr.webhook.url": {
+          "type": "string",
+          "default": "",
+          "description": "Webhook endpoint that receives a plain-text POST per notification."
+        },
+        "nerdr.webhook.states": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "working",
+              "blocked",
+              "idle",
+              "done",
+              "error",
+              "unknown"
+            ]
+          },
+          "default": [
+            "blocked",
+            "error",
+            "done"
+          ],
+          "description": "Agent states that trigger a webhook POST."
+        },
+        "nerdr.webhook.cooldownMs": {
+          "type": "number",
+          "default": 5000,
+          "description": "Minimum time between webhook POSTs for the same agent, in milliseconds."
+        },
+        "nerdr.webhook.notifyOffline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Also POST when an agent goes offline or exits."
+        },
+        "nerdr.webhook.includeDetail": {
+          "type": "boolean",
+          "default": true,
+          "description": "Append the short detail (e.g. a permission title) to the notification message."
         }
       }
     }
