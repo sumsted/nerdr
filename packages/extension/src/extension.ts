@@ -72,6 +72,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const lastStatus = new Map<string, AgentStatus>();
   const lastBellAt = new Map<string, number>();
+  // Agents seen online with no live terminal pane; removed on the next pass.
+  const offlineByLiveness = new Set<string>();
 
   let server: BridgeServer | undefined;
 
@@ -80,6 +82,7 @@ export function activate(context: vscode.ExtensionContext): void {
     server = new BridgeServer({
       onHello: (identity, snapshot) => {
         log(`agent online: ${identity.title} (${identity.id}) in ${identity.directory}`);
+        offlineByLiveness.delete(identity.id);
         store.hello(identity, snapshot);
         void locator.refresh();
       },
@@ -176,9 +179,30 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const staleTimer = setInterval(() => {
+    void locator.refresh();
     const now = Date.now();
     for (const agent of store.list()) {
-      if (agent.online && now - agent.updatedAt > config.staleTimeoutMs) {
+      if (!agent.online) continue;
+
+      // OpenCode 2.x keeps the workspace loaded in its shared service after a
+      // terminal closes, so heartbeats keep flowing. Trust the OS instead: if
+      // no live OpenCode pane is rooted in this workspace, the agent is gone.
+      const paneAlive = locator.hasLivePane(agent.identity.directory);
+      if (paneAlive === false) {
+        if (offlineByLiveness.has(agent.identity.id)) {
+          log(`agent pane gone: ${agent.identity.id}`);
+          offlineByLiveness.delete(agent.identity.id);
+          store.remove(agent.identity.id);
+        } else {
+          log(`agent went offline (no terminal pane): ${agent.identity.id}`);
+          store.markOffline(agent.identity.id);
+          offlineByLiveness.add(agent.identity.id);
+        }
+        continue;
+      }
+      if (paneAlive === true) offlineByLiveness.delete(agent.identity.id);
+
+      if (now - agent.updatedAt > config.staleTimeoutMs) {
         log(`agent went stale: ${agent.identity.id}`);
         store.markOffline(agent.identity.id);
       }
@@ -202,12 +226,16 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       await locator.refresh();
-      const terminal = locator.findTerminal(agent.identity.pid);
+      // Prefer the live TUI process rooted in the agent's workspace: the
+      // plugin runs in the shared OpenCode service, so its reported PID is the
+      // daemon, not the terminal.
+      const panePid = locator.findAgentPid(agent.identity.directory) ?? agent.identity.pid;
+      const terminal = locator.findTerminal(panePid);
       if (terminal) {
         terminal.show();
       } else {
         void vscode.window.showWarningMessage(
-          `Nerdr: could not find a terminal for "${agent.identity.title}" (pid ${agent.identity.pid}).`,
+          `Nerdr: could not find a terminal for "${agent.identity.title}" (pid ${panePid}).`,
         );
       }
       store.markSeen(agent.identity.id);

@@ -1,9 +1,10 @@
 /**
  * Nerdr wire protocol.
  *
- * The OpenCode plugin (running inside an agent process) connects to the Nerdr
- * VSCodium extension over a loopback TCP socket and speaks newline-delimited
- * JSON. The extension is the server; each agent process is a client.
+ * The OpenCode plugin (running inside the shared OpenCode service) connects to
+ * the Nerdr VSCodium extension over a loopback TCP socket and speaks
+ * newline-delimited JSON. The extension is the server; each OpenCode workspace
+ * (location) is a client.
  *
  * This module is intentionally dependency-free so it can be bundled into both
  * the extension and the OpenCode plugin.
@@ -56,9 +57,13 @@ export interface TerminalHint {
 
 /** Stable identity for one agent process. */
 export interface AgentIdentity {
-  /** Stable id, typically `pid:<pid>`. */
+  /** Stable id for the agent, e.g. `loc:<workspace directory>`. */
   id: string;
-  /** OS process id of the OpenCode process. */
+  /**
+   * OS process id that reported this agent. With OpenCode 2.x this is the
+   * shared service process, not the terminal pane; use the workspace
+   * `directory` (and the extension's process scan) to locate the pane.
+   */
   pid: number;
   /** Human-friendly label, e.g. the session title or project folder name. */
   title: string;
@@ -104,8 +109,9 @@ export interface AgentSnapshot {
    */
   unseenDone?: boolean;
   /**
-   * Whether the bridge currently has a live socket for this agent. Set by the
-   * extension; `false` means the process exited or went silent.
+   * Whether the bridge currently has a live socket for this agent. The
+   * extension also clears this when no terminal pane remains rooted in the
+   * workspace, even if the shared OpenCode service is still connected.
    */
   online: boolean;
 }

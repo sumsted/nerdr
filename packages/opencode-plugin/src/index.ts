@@ -1,4 +1,4 @@
-import type { Plugin } from "@opencode-ai/plugin";
+import type { Plugin } from "@opencode/plugin";
 import * as os from "node:os";
 import * as path from "node:path";
 import { BridgeClient } from "./bridge.js";
@@ -37,175 +37,173 @@ function isInteractiveTool(tool: string | undefined): boolean {
   return tool === "question" || tool === "ask";
 }
 
-/** First readable label from the `question.asked` payload. */
-function questionLabel(properties: unknown): string {
-  const record = properties as { questions?: unknown } | undefined;
-  const questions = Array.isArray(record?.questions) ? record.questions : [];
-  const first = questions[0] as { header?: unknown; question?: unknown } | undefined;
-  if (first && typeof first.header === "string" && first.header) return first.header;
-  if (first && typeof first.question === "string" && first.question) return first.question;
-  return "Waiting for your answer";
+type Context = Plugin.Context;
+type EventEnvelope = {
+  type?: string;
+  data?: Record<string, unknown>;
+  location?: { directory?: string };
+};
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
 /**
- * OpenCode plugin entry point.
+ * Nerdr OpenCode plugin (OpenCode 2.0).
  *
- * It opens a loopback connection to the Nerdr VSCodium extension and streams
- * lifecycle state for this OpenCode process. The unit of tracking is the
- * process (one terminal pane), matching Herdr's pane-oriented model.
+ * Opens a loopback connection to the Nerdr VSCodium extension and streams
+ * lifecycle state for this OpenCode process.
+ *
+ * The tracked unit is the OpenCode **location** (workspace), not the OS
+ * process: OpenCode 2.x runs one long-lived service (`opencode serve
+ * --service`) and loads this plugin once per location inside it. A
+ * process-based identity would collide across every workspace served by that
+ * daemon, so each location registers under its own directory.
  */
-export const NerdrPlugin: Plugin = async ({ directory, serverUrl, project }) => {
-  const pid = process.pid;
-  // Name the agent after the workspace directory it was started in. This is not
-  // OpenCode's session title, which is auto-generated and can change once the
-  // first task completes.
-  const repoRoot = project?.worktree;
-  const worktree =
-    repoRoot && repoRoot !== "/" && repoRoot !== directory ? repoRoot : undefined;
-  const identity: AgentIdentity = {
-    id: `pid:${pid}`,
-    pid,
-    title: basename(directory),
-    directory,
-    worktree,
-    serverUrl: serverUrl?.toString(),
-    version: process.env.OPENCODE_VERSION,
-    host: os.hostname(),
-    terminal: collectTerminalHint(),
-  };
+export default {
+  id: "nerdr",
+  async setup(ctx: Context): Promise<() => Promise<void>> {
+    const directory = String(ctx.location.directory);
+    // Name the agent after the workspace directory it was started in, not
+    // OpenCode's auto-generated (and regenerated) session title.
+    const canonical = ctx.location.project?.canonical
+      ? String(ctx.location.project.canonical)
+      : undefined;
+    const worktree = canonical && canonical !== "/" && canonical !== directory ? canonical : undefined;
 
-  const bridge = new BridgeClient(identity);
-  bridge.start();
+    const pid = process.pid;
+    const identity: AgentIdentity = {
+      // Unique per location, stable across plugin/daemon restarts.
+      id: `loc:${directory}`,
+      // PID of the shared OpenCode service, kept for display/debugging only.
+      pid,
+      title: basename(directory),
+      directory,
+      worktree,
+      version: ctx.app.version,
+      host: os.hostname(),
+      terminal: collectTerminalHint(),
+    };
 
-  let lastStatus: AgentStatus = "idle";
-  const setStatus = (status: AgentStatus, message?: string, lastEvent?: string) => {
-    if (status === lastStatus && !message) return;
-    lastStatus = status;
-    bridge.setState(status, message, lastEvent);
-  };
+    const bridge = new BridgeClient(identity);
 
-  /** Patch identity only when a value actually changed, to avoid meta chatter. */
-  const patchIdentityIfChanged = (patch: Partial<AgentIdentity>) => {
-    let changed = false;
-    for (const [key, value] of Object.entries(patch)) {
-      if (value !== undefined && (identity as unknown as Record<string, unknown>)[key] !== value) {
-        changed = true;
-        break;
-      }
-    }
-    if (changed) bridge.patchIdentity(patch);
-  };
+    // The service keeps a location loaded (and this plugin running) even after
+    // its terminal/TUI detaches, so we cannot rely on this process exiting.
+    // Skip the service's own root location: it is not an agent workspace and
+    // would otherwise surface as a phantom "home" row.
+    const isRootLocation = directory === os.homedir() || directory === "/";
+    if (!isRootLocation) bridge.start();
 
-  /**
-   * Handles events whose names drifted between the SDK types we compile against
-   * (1.18.21) and the runtime (1.18.30+). Returns true when the event was
-   * consumed. Kept separate so the typed switch below stays type-safe.
-   */
-  const handleDriftedEvent = (event: unknown): boolean => {
-    const e = event as { type?: string; properties?: any };
-    switch (e?.type) {
-      case "question.asked":
-        setStatus("blocked", questionLabel(e.properties), "question.asked");
-        return true;
-      case "question.replied":
-      case "question.rejected":
-        setStatus("working", undefined, e.type);
-        return true;
-      case "permission.asked": {
-        const title = e.properties?.title;
-        setStatus("blocked", typeof title === "string" ? title : "Permission needed", "permission.asked");
-        return true;
-      }
-      default:
-        return false;
-    }
-  };
+    const controller = new AbortController();
+    let stopped = false;
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      controller.abort();
+      bridge.close();
+    };
 
-  return {
-    event: async ({ event }) => {
-      if (handleDriftedEvent(event)) return;
-      switch (event.type) {
-        case "session.created":
-        case "session.updated": {
-          const info = event.properties.info;
-          const slug = (info as { slug?: unknown }).slug;
-          setStatus(lastStatus, undefined, event.type);
-          bridge.patchIdentity({
-            sessionID: info.id,
-            slug: typeof slug === "string" ? slug : undefined,
-          });
-          break;
+    let lastStatus: AgentStatus = "idle";
+    const setStatus = (status: AgentStatus, message?: string, lastEvent?: string) => {
+      if (stopped) return;
+      if (status === lastStatus && !message) return;
+      lastStatus = status;
+      bridge.setState(status, message, lastEvent);
+    };
+
+    const patchIdentityIfChanged = (patch: Partial<AgentIdentity>) => {
+      if (stopped) return;
+      for (const [key, value] of Object.entries(patch)) {
+        if (value !== undefined && (identity as unknown as Record<string, unknown>)[key] !== value) {
+          bridge.patchIdentity(patch);
+          return;
         }
+      }
+    };
+
+    const handleEvent = (raw: unknown) => {
+      if (stopped) return;
+      const event = raw as EventEnvelope;
+      // The service streams events for every location it serves; only react to
+      // the events that belong to this location.
+      const eventDirectory = asString(event.location?.directory);
+      if (eventDirectory && eventDirectory !== directory) return;
+
+      const data = (event.data ?? {}) as Record<string, any>;
+      const sessionID = asString(data.sessionID);
+      if (sessionID) patchIdentityIfChanged({ sessionID });
+
+      switch (event.type) {
         case "session.status": {
-          const status = event.properties.status;
-          if (status.type === "busy") {
-            setStatus("working", undefined, event.type);
-          } else if (status.type === "retry") {
+          const status = data.status as { type?: string; attempt?: number; message?: string } | undefined;
+          if (status?.type === "busy") setStatus("working", undefined, event.type);
+          else if (status?.type === "retry")
             setStatus("working", `retrying (attempt ${status.attempt}): ${status.message}`, event.type);
-          } else {
-            setStatus("idle", undefined, event.type);
-          }
+          else setStatus("idle", undefined, event.type);
           break;
         }
         case "session.idle":
           setStatus("done", undefined, event.type);
           break;
-        case "permission.updated":
-          setStatus("blocked", event.properties.title, event.type);
+        case "permission.asked": {
+          const label = asString(data.message) ?? asString(data.action) ?? "Permission needed";
+          setStatus("blocked", label, event.type);
           break;
+        }
         case "permission.replied":
           setStatus("working", undefined, event.type);
           break;
-        case "session.error": {
-          setStatus("error", errorText(event.properties.error), event.type);
+        case "session.retry.scheduled":
+          setStatus("working", `retrying (attempt ${data.attempt})`, event.type);
+          break;
+        case "session.execution.failed":
+          setStatus("error", errorText(data.error), event.type);
+          break;
+        case "session.created": {
+          const id = asString(data.id) ?? sessionID;
+          if (id) patchIdentityIfChanged({ sessionID: id });
           break;
         }
-        case "message.updated": {
-          const info = event.properties.info;
-          if (info.role === "assistant") {
-            patchIdentityIfChanged({
-              agent: info.mode,
-              model: `${info.providerID}/${info.modelID}`,
-            });
-            if (!info.time.completed) {
-              setStatus("working", undefined, event.type);
-            }
-          }
-          break;
-        }
-        case "todo.updated":
-          bridge.patchIdentity({});
+        case "location.shutdown":
+          // The workspace was torn down; tell the extension to drop the agent.
+          stop();
           break;
         default:
           break;
       }
-    },
-    "chat.message": async (input) => {
-      patchIdentityIfChanged({
-        agent: input.agent,
-        model: input.model ? `${input.model.providerID}/${input.model.modelID}` : undefined,
-      });
-      setStatus("working", undefined, "chat.message");
-    },
-    "tool.execute.before": async (input) => {
-      if (isInteractiveTool(input.tool)) {
-        setStatus("blocked", `Waiting on ${input.tool}`, "tool.execute.before");
-      } else {
-        setStatus("working", undefined, "tool.execute.before");
-      }
-    },
-    "tool.execute.after": async (input) => {
-      if (isInteractiveTool(input.tool)) {
-        setStatus("working", undefined, "tool.execute.after");
-      }
-    },
-    "permission.ask": async (input) => {
-      setStatus("blocked", input.title, "permission.ask");
-    },
-    dispose: async () => {
-      bridge.close();
-    },
-  };
-};
+    };
 
-export default NerdrPlugin;
+    if (!isRootLocation) {
+      // Hooks: prompt admission, tool execution, and permissions.
+      await ctx.session.hook("prompt", () => {
+        setStatus("working", undefined, "session.prompt");
+      });
+      await ctx.tool.hook("execute.before", (event) => {
+        if (isInteractiveTool(event.tool)) {
+          setStatus("blocked", `Waiting on ${event.tool}`, "tool.execute.before");
+        } else {
+          setStatus("working", undefined, "tool.execute.before");
+        }
+      });
+      await ctx.tool.hook("execute.after", (event) => {
+        if (isInteractiveTool(event.tool)) {
+          setStatus("working", undefined, "tool.execute.after");
+        }
+      });
+
+      void (async () => {
+        try {
+          for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+            handleEvent(event);
+          }
+        } catch {
+          // Subscription aborted on cleanup, or the stream ended.
+        }
+      })();
+    }
+
+    return async () => {
+      stop();
+    };
+  },
+};

@@ -20,6 +20,8 @@ interface ProcInfo {
 export class TerminalLocator implements vscode.Disposable {
   private readonly terminalsByPid = new Map<number, vscode.Terminal>();
   private readonly processes = new Map<number, ProcInfo>();
+  private readonly workdirs = new Map<number, string>();
+  private workdirsAvailable = false;
   private refreshPromise?: Promise<void>;
 
   constructor(private readonly log: (message: string) => void) {}
@@ -44,6 +46,7 @@ export class TerminalLocator implements vscode.Disposable {
 
   private async doRefresh(): Promise<void> {
     await this.readProcessTable();
+    await this.readWorkdirs();
     const next = new Map<number, vscode.Terminal>();
     for (const terminal of vscode.window.terminals) {
       let pid: number | undefined;
@@ -79,6 +82,60 @@ export class TerminalLocator implements vscode.Disposable {
     } catch (error) {
       this.log(`failed to read process table: ${String(error)}`);
     }
+  }
+
+  private async readWorkdirs(): Promise<void> {
+    this.workdirs.clear();
+    this.workdirsAvailable = false;
+    if (process.platform === "win32") return;
+    // OpenCode 2.x serves every workspace from one shared `opencode serve`
+    // process, so the plugin runs inside the daemon rather than the terminal.
+    // Map each live `opencode` process to its working directory: the TUI
+    // process carries the workspace as its cwd and a real tty, whereas the
+    // daemon has no tty. This is what lets us tell whether a workspace still
+    // has a live pane.
+    try {
+      const { stdout } = await execFileAsync(
+        "lsof",
+        ["-nP", "-a", "-d", "cwd", "-c", "opencode", "-F", "pn"],
+        { maxBuffer: 4 * 1024 * 1024 },
+      );
+      let pid: number | undefined;
+      for (const line of stdout.split("\n")) {
+        if (line.startsWith("p")) {
+          const value = Number(line.slice(1));
+          pid = Number.isFinite(value) ? value : undefined;
+        } else if (line.startsWith("n") && pid !== undefined) {
+          this.workdirs.set(pid, line.slice(1));
+        }
+      }
+      this.workdirsAvailable = true;
+    } catch (error) {
+      this.log(`failed to read OpenCode working directories (lsof): ${String(error)}`);
+    }
+  }
+
+  private hasTty(info: ProcInfo | undefined): boolean {
+    return !!info && info.tty !== "??" && info.tty !== "-";
+  }
+
+  /**
+   * Whether a live OpenCode pane exists for the given workspace directory.
+   * Returns `undefined` when liveness could not be determined (e.g. `lsof` is
+   * unavailable), so callers do not mistake "unknown" for "gone".
+   */
+  hasLivePane(directory: string): boolean | undefined {
+    if (!this.workdirsAvailable) return undefined;
+    return this.findAgentPid(directory) !== undefined;
+  }
+
+  /** PID of a live OpenCode TUI process rooted in the given directory, if any. */
+  findAgentPid(directory: string): number | undefined {
+    if (!this.workdirsAvailable) return undefined;
+    for (const [pid, cwd] of this.workdirs) {
+      if (cwd === directory && this.hasTty(this.processes.get(pid))) return pid;
+    }
+    return undefined;
   }
 
   findTerminal(agentPid: number): vscode.Terminal | undefined {

@@ -13,9 +13,12 @@ It is two cooperating pieces: a small **OpenCode plugin** that streams lifecycle
 state, and a **VSCodium extension** that aggregates it, renders the list, locates
 the owning terminal, and rings the bell.
 
+Nerdr targets **OpenCode 2.x** (the shared `opencode serve` service and its
+per-workspace *locations*). OpenCode 1.x is not supported.
+
 ```
 ┌─────────────────────────┐   loopback TCP (newline JSON)   ┌───────────────────────────┐
-│ OpenCode process        │ ──────────────────────────────▶ │ Nerdr VSCodium extension  │
+│ OpenCode 2.x service    │ ──────────────────────────────▶ │ Nerdr VSCodium extension  │
 │ @nerdr/opencode-plugin  │ ◀────────────────────────────── │  • BridgeServer (:27182)  │
 │  • session/status hooks │     welcome / pong               │  • AgentStore             │
 │  • permission + question│                                 │  • Agents TreeView        │
@@ -25,14 +28,16 @@ the owning terminal, and rings the bell.
                                                              └───────────────────────────┘
 ```
 
-The tracked unit is the **OpenCode process** (one terminal pane), matching Herdr's
-pane-oriented model.
+The tracked unit is the **OpenCode workspace/location** (one project directory).
+OpenCode 2.x serves every workspace from a single shared `opencode serve`
+process, so Nerdr identifies agents by workspace directory rather than by OS
+process.
 
 ## Requirements
 
 - **Node.js 18+** and npm (the build uses npm workspaces)
 - **VSCodium 1.85+**
-- The **OpenCode CLI**; the plugin is loaded by each `opencode` process
+- **OpenCode 2.0+** CLI; the plugin loads inside the shared `opencode serve` service
 
 ## Repository layout
 
@@ -90,8 +95,9 @@ For development, open the repository root in VSCodium and press `F5`
 
 ## Install the OpenCode plugin
 
-The plugin bundle is standalone and has no runtime dependencies. Copy it into your
-OpenCode plugins directory:
+Requires **OpenCode 2.0+**. The plugin is a standalone bundle with no runtime
+dependencies; copy it into your OpenCode plugins directory (auto-discovered in
+both V2 global and project layouts):
 
 ```bash
 # macOS / Linux
@@ -105,16 +111,15 @@ New-Item -ItemType Directory -Force "$HOME\.config\opencode\plugins" | Out-Null
 Copy-Item packages\opencode-plugin\dist\nerdr.js "$HOME\.config\opencode\plugins\nerdr.js"
 ```
 
-Or reference it directly in `opencode.json`:
+Or reference it directly in `opencode.json(c)` under the V2 `plugins` key:
 
 ```json
-{ "plugin": ["./.opencode/plugins/nerdr.js"] }
+{ "plugins": ["./.opencode/plugins/nerdr.js"] }
 ```
 
 Order does not matter: the plugin discovers the bridge file on every reconnect.
-**Restart any running `opencode` processes** after installing or updating the
-plugin — plugins load at process startup, so an already-running session keeps the
-old copy in memory.
+OpenCode 2.0 hot-reloads many changes, but if a running session keeps the old copy
+in memory, `opencode service restart` (or restart the session) picks up the new one.
 
 ## Verify it works
 
@@ -129,16 +134,18 @@ old copy in memory.
 
 ## State model
 
+OpenCode 2.0 event → Nerdr status:
+
 | Nerdr status | Triggered by |
 | --- | --- |
-| `working` | `chat.message`, `tool.execute.before`, `session.status = busy/retry`, `question.replied` |
-| `blocked` | `permission.ask` / `permission.asked` / `permission.updated`, `question.asked` |
+| `working` | `session.hook("prompt")`, `tool.hook("execute.before")`, `session.status = busy/retry`, `session.retry.scheduled`, `permission.replied` |
+| `blocked` | `permission.asked`, interactive tools (`question`/`ask`) via `tool.hook("execute.before")` |
 | `done` | `session.idle` (turn finished, ready for review) |
 | `idle` | `session.status = idle` |
-| `error` | `session.error` |
+| `error` | `session.execution.failed` |
 
-The agent/mode (`build`, `plan`, …) and model are captured from `chat.message` and
-assistant messages, and shown in the item tooltip.
+Identity (session id) is captured from event payloads; agent naming comes from the
+workspace directory (see below).
 
 ## Agent naming
 
@@ -148,6 +155,10 @@ use OpenCode's session title, because OpenCode auto-generates (and can regenerat
 that title, for example when the first task completes. When two agents share a
 directory name, the OpenCode session slug is appended for disambiguation
 (`nerdr · tidy-falcon`).
+
+Because OpenCode 2.x runs all workspaces inside one long-lived service, the
+service's own root location (your home directory when it was launched) is
+ignored, and each workspace is tracked under its directory.
 
 ## Commands
 
@@ -232,10 +243,20 @@ failures (5+) surface one warning.
 
 ## How terminal matching works
 
-`TerminalLocator` reads the OS process table (`ps -Ao pid=,ppid=,tty=`) and walks
-up from the agent's reported PID until it reaches a PID that
+OpenCode 2.x loads the Nerdr plugin inside its shared `opencode serve` service,
+so the PID the plugin reports is that daemon, not your terminal. To find the
+right pane, `TerminalLocator` reads the OS process table (`ps`) plus each live
+`opencode` process's working directory (`lsof -a -d cwd -c opencode`). The TUI
+process carries the workspace as its cwd and owns a real tty; the daemon does
+not. Nerdr walks up from that TUI PID until it reaches a PID that
 `vscode.window.terminals` reports for a terminal. This is how **Focus Agent
-Terminal** lands on the right pane. Windows matching is not implemented yet.
+Terminal** lands on the right pane.
+
+The same cwd scan drives liveness: when no `opencode` pane is rooted in a
+workspace, the agent is marked offline (grey) and then removed on the next pass,
+even though the shared service is still running. Windows matching is not
+implemented yet; on systems without `lsof`, Nerdr falls back to heartbeat
+timeouts and never marks a workspace offline based on process scans.
 
 ## Troubleshooting
 
@@ -256,9 +277,10 @@ The core four requirements are implemented. The following Herdr capabilities are
 **not** in this MVP:
 
 - **Detach / persistence.** Herdr keeps agents alive across terminal closes and
-  machine restarts. Nerdr observes OpenCode processes owned by VSCodium terminals;
-  closing the terminal or VSCodium ends them. Could be addressed by driving a
-  long-lived `opencode serve` and attaching the UI to it.
+  machine restarts. OpenCode 2.x already does much of this via its shared
+  `opencode serve` service, but Nerdr only reports a workspace while a live
+  terminal pane is rooted in it: closing the pane marks the agent offline (then
+  removes it) even though the service stays warm.
 - **Live terminal views.** Herdr renders real pane contents. Nerdr shows status
   and focuses the existing terminal; it does not mirror output.
 - **Reading pane output.** No `agent read` equivalent (visible/recent/unwrapped).

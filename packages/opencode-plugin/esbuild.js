@@ -9,7 +9,7 @@ await build({
   target: "node20",
   sourcemap: true,
   legalComments: "none",
-  external: ["@opencode-ai/plugin", "node:*"],
+  external: ["@opencode/plugin", "node:*"],
   banner: {
     js: "// Nerdr OpenCode plugin - reports agent state to the VSCodium extension. Bundled by esbuild.",
   },

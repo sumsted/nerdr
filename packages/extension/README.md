@@ -2,6 +2,9 @@
 
 Herdr-like agent awareness for OpenCode agents running in VSCodium terminals.
 
+Requires **OpenCode 2.x** (the shared `opencode serve` service and its
+per-workspace locations).
+
 See the repository root `README.md` for full architecture, installation, settings,
 and limitations.
 

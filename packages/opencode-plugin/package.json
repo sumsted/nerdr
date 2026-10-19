@@ -16,7 +16,7 @@
     "@nerdr/protocol": "*"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "^1.18.0",
+    "@opencode/plugin": "^2.0.32",
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.7.0"
