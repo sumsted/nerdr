@@ -74,6 +74,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const lastBellAt = new Map<string, number>();
   // Agents seen online with no live terminal pane; removed on the next pass.
   const offlineByLiveness = new Set<string>();
+  // Consecutive failed pane scans per agent, so one transient hiccup can't
+  // hide a live agent.
+  const missedPaneChecks = new Map<string, number>();
 
   let server: BridgeServer | undefined;
 
@@ -83,6 +86,7 @@ export function activate(context: vscode.ExtensionContext): void {
       onHello: (identity, snapshot) => {
         log(`agent online: ${identity.title} (${identity.id}) in ${identity.directory}`);
         offlineByLiveness.delete(identity.id);
+        missedPaneChecks.delete(identity.id);
         store.hello(identity, snapshot);
         void locator.refresh();
       },
@@ -94,6 +98,8 @@ export function activate(context: vscode.ExtensionContext): void {
       },
       onBye: (agentId) => {
         log(`agent said goodbye: ${agentId}`);
+        offlineByLiveness.delete(agentId);
+        missedPaneChecks.delete(agentId);
         store.remove(agentId);
       },
       onDisconnect: (agentId) => {
@@ -189,9 +195,14 @@ export function activate(context: vscode.ExtensionContext): void {
       // no live OpenCode pane is rooted in this workspace, the agent is gone.
       const paneAlive = locator.hasLivePane(agent.identity.directory);
       if (paneAlive === false) {
+        const misses = (missedPaneChecks.get(agent.identity.id) ?? 0) + 1;
+        missedPaneChecks.set(agent.identity.id, misses);
+        // Require two consecutive misses before acting on a negative scan.
+        if (misses < 2) continue;
         if (offlineByLiveness.has(agent.identity.id)) {
           log(`agent pane gone: ${agent.identity.id}`);
           offlineByLiveness.delete(agent.identity.id);
+          missedPaneChecks.delete(agent.identity.id);
           store.remove(agent.identity.id);
         } else {
           log(`agent went offline (no terminal pane): ${agent.identity.id}`);
@@ -200,6 +211,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         continue;
       }
+      missedPaneChecks.delete(agent.identity.id);
       if (paneAlive === true) offlineByLiveness.delete(agent.identity.id);
 
       if (now - agent.updatedAt > config.staleTimeoutMs) {

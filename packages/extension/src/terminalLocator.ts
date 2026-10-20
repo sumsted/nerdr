@@ -62,11 +62,13 @@ export class TerminalLocator implements vscode.Disposable {
   }
 
   private async readProcessTable(): Promise<void> {
-    this.processes.clear();
     if (process.platform === "win32") {
       this.log("terminal matching is not implemented on win32 yet");
       return;
     }
+    // Build into a local map and swap at the end so a concurrent liveness
+    // check never observes a half-cleared table.
+    const next = new Map<number, ProcInfo>();
     try {
       const { stdout } = await execFileAsync("ps", ["-Ao", "pid=,ppid=,tty="], {
         maxBuffer: 8 * 1024 * 1024,
@@ -77,23 +79,28 @@ export class TerminalLocator implements vscode.Disposable {
         const pid = Number(match[1]);
         const ppid = Number(match[2]);
         const tty = match[3] ?? "??";
-        if (Number.isFinite(pid)) this.processes.set(pid, { ppid, tty });
+        if (Number.isFinite(pid)) next.set(pid, { ppid, tty });
       }
     } catch (error) {
       this.log(`failed to read process table: ${String(error)}`);
+      return;
     }
+    this.processes.clear();
+    for (const [pid, info] of next) this.processes.set(pid, info);
   }
 
   private async readWorkdirs(): Promise<void> {
-    this.workdirs.clear();
-    this.workdirsAvailable = false;
-    if (process.platform === "win32") return;
+    if (process.platform === "win32") {
+      this.workdirsAvailable = false;
+      return;
+    }
     // OpenCode 2.x serves every workspace from one shared `opencode serve`
     // process, so the plugin runs inside the daemon rather than the terminal.
     // Map each live `opencode` process to its working directory: the TUI
     // process carries the workspace as its cwd and a real tty, whereas the
     // daemon has no tty. This is what lets us tell whether a workspace still
     // has a live pane.
+    const next = new Map<number, string>();
     try {
       const { stdout } = await execFileAsync(
         "lsof",
@@ -106,13 +113,18 @@ export class TerminalLocator implements vscode.Disposable {
           const value = Number(line.slice(1));
           pid = Number.isFinite(value) ? value : undefined;
         } else if (line.startsWith("n") && pid !== undefined) {
-          this.workdirs.set(pid, line.slice(1));
+          next.set(pid, line.slice(1));
         }
       }
-      this.workdirsAvailable = true;
     } catch (error) {
       this.log(`failed to read OpenCode working directories (lsof): ${String(error)}`);
+      this.workdirsAvailable = false;
+      return;
     }
+    // Only mark the scan as authoritative once it has actually completed.
+    this.workdirs.clear();
+    for (const [pid, cwd] of next) this.workdirs.set(pid, cwd);
+    this.workdirsAvailable = true;
   }
 
   private hasTty(info: ProcInfo | undefined): boolean {
