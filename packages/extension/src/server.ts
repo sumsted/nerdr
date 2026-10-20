@@ -55,6 +55,8 @@ function bridgeFilePath(): string {
 export class BridgeServer implements vscode.Disposable {
   private server?: net.Server;
   private readonly clients = new Map<number, ClientState>();
+  /** Live bridge connections per agent (OpenCode may reload a plugin while the old one is still closing). */
+  private readonly agentConnections = new Map<string, number>();
   private port = 0;
   private token = "";
   private disposed = false;
@@ -98,7 +100,9 @@ export class BridgeServer implements vscode.Disposable {
     socket.on("close", () => {
       const state = this.clients.get(id);
       this.clients.delete(id);
-      this.handlers.onDisconnect(state?.agentId);
+      if (state?.agentId) {
+        if (this.releaseAgent(state.agentId)) this.handlers.onDisconnect(state.agentId);
+      }
     });
     socket.on("error", () => {
       // The close handler performs cleanup.
@@ -133,8 +137,12 @@ export class BridgeServer implements vscode.Disposable {
           return;
         }
         const state = this.clients.get(id);
-        if (state) state.agentId = message.agent.id;
-        this.handlers.onHello(message.agent, message.snapshot);
+        if (!state) return;
+        const firstConnection = this.trackAgent(state, message.agent.id);
+        // A plugin hot-reload briefly keeps two sockets for the same location.
+        // Only the first hello should replace the snapshot; the second must not
+        // reset a working agent back to the plugin's initial `idle` snapshot.
+        if (firstConnection) this.handlers.onHello(message.agent, message.snapshot);
         this.send(id, { type: "welcome", protocol: PROTOCOL_VERSION, at: Date.now() });
         break;
       }
@@ -156,10 +164,43 @@ export class BridgeServer implements vscode.Disposable {
         this.send(id, { type: "pong", at: Date.now() });
         break;
       }
-      case "bye":
-        this.handlers.onBye(message.agentId);
+      case "bye": {
+        const state = this.clients.get(id);
+        const agentId = state?.agentId;
+        if (!state || !agentId) break;
+        state.agentId = undefined;
+        if (this.releaseAgent(agentId)) this.handlers.onBye(agentId);
         break;
+      }
     }
+  }
+
+  /**
+   * Associate a socket with an agent. Returns true when this is the first live
+   * connection for that agent.
+   */
+  private trackAgent(state: ClientState, agentId: string): boolean {
+    if (state.agentId === agentId) return false;
+    const previous = state.agentId;
+    if (previous) {
+      state.agentId = undefined;
+      if (this.releaseAgent(previous)) this.handlers.onDisconnect(previous);
+    }
+    state.agentId = agentId;
+    const count = (this.agentConnections.get(agentId) ?? 0) + 1;
+    this.agentConnections.set(agentId, count);
+    return count === 1;
+  }
+
+  /** Returns true when the agent no longer has any live connection. */
+  private releaseAgent(agentId: string): boolean {
+    const count = this.agentConnections.get(agentId) ?? 0;
+    if (count <= 1) {
+      this.agentConnections.delete(agentId);
+      return count === 1;
+    }
+    this.agentConnections.set(agentId, count - 1);
+    return false;
   }
 
   private send(id: number, message: ServerMessage): void {

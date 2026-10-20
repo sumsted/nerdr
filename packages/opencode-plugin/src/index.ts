@@ -135,13 +135,37 @@ export default {
 
       switch (event.type) {
         case "session.status": {
+          // `busy`/`retry` are authoritative. `idle` is not: OpenCode 2.x
+          // emits it between steps while a turn is still running, so the step
+          // events below own the working/done transition.
           const status = data.status as { type?: string; attempt?: number; message?: string } | undefined;
           if (status?.type === "busy") setStatus("working", undefined, event.type);
           else if (status?.type === "retry")
             setStatus("working", `retrying (attempt ${status.attempt}): ${status.message}`, event.type);
-          else setStatus("idle", undefined, event.type);
           break;
         }
+        case "session.step.started":
+          setStatus("working", undefined, event.type);
+          break;
+        case "session.step.ended": {
+          const finish = asString(data.finish) ?? asString(data.rawFinish);
+          if (finish === "tool-calls" || finish === "tool_calls") {
+            // The assistant called tools; the turn continues with another step.
+            setStatus("working", undefined, event.type);
+          } else if (finish === "error") {
+            setStatus("error", errorText(data.error), event.type);
+          } else {
+            setStatus("done", undefined, event.type);
+          }
+          break;
+        }
+        case "session.reasoning.started":
+        case "session.tool.input.started":
+        case "session.tool.called":
+        case "session.tool.success":
+        case "session.tool.error":
+          setStatus("working", undefined, event.type);
+          break;
         case "session.idle":
           setStatus("done", undefined, event.type);
           break;

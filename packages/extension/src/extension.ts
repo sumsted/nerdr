@@ -90,8 +90,10 @@ export function activate(context: vscode.ExtensionContext): void {
         store.hello(identity, snapshot);
         void locator.refresh();
       },
-      onState: (agentId, status, message, attention, lastEvent) =>
-        store.setState(agentId, status, message, attention, lastEvent),
+      onState: (agentId, status, message, attention, lastEvent) => {
+        log(`agent state: ${agentId} -> ${status}${lastEvent ? ` (${lastEvent})` : ""}`);
+        store.setState(agentId, status, message, attention, lastEvent);
+      },
       onMeta: (agentId, patch) => store.patchMeta(agentId, patch),
       onPing: (agentId) => {
         if (agentId) store.touch(agentId);
