@@ -85,6 +85,25 @@
       {
         "command": "nerdr.webhook.clearToken",
         "title": "Nerdr: Clear Webhook Token"
+      },
+      {
+        "command": "nerdr.telegram.configure",
+        "title": "Nerdr: Configure Telegram",
+        "icon": "$(send)"
+      },
+      {
+        "command": "nerdr.telegram.status",
+        "title": "Nerdr: Telegram Status",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "nerdr.telegram.test",
+        "title": "Nerdr: Test Telegram",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "nerdr.telegram.disable",
+        "title": "Nerdr: Disable Telegram"
       }
     ],
     "viewsContainers": {

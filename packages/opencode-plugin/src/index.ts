@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode/plugin";
 import * as os from "node:os";
 import * as path from "node:path";
 import { BridgeClient } from "./bridge.js";
+import { startTelegramLeader } from "./telegram/leader.js";
 import type { AgentIdentity, AgentStatus, TerminalHint } from "@nerdr/protocol";
 
 function collectTerminalHint(): TerminalHint {
@@ -86,6 +87,10 @@ export default {
     };
 
     const bridge = new BridgeClient(identity);
+    // Every location starts the Telegram leader candidate; a loopback port
+    // elects exactly one poller for the whole machine. The bridge is idle until
+    // ~/.nerdr/telegram.json exists and is enabled.
+    const telegram = startTelegramLeader();
 
     // The service keeps a location loaded (and this plugin running) even after
     // its terminal/TUI detaches, so we cannot rely on this process exiting.
@@ -101,6 +106,7 @@ export default {
       stopped = true;
       controller.abort();
       bridge.close();
+      void telegram.stop();
     };
 
     let lastStatus: AgentStatus = "idle";
@@ -228,6 +234,7 @@ export default {
 
     return async () => {
       stop();
+      await telegram.stop();
     };
   },
 };

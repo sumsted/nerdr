@@ -193,3 +193,5 @@ export function parseMessage<T = ClientMessage>(line: string): T | undefined {
 export function encodeMessage(message: ClientMessage | ServerMessage): string {
   return `${JSON.stringify(message)}\n`;
 }
+
+export * from "./telegram.js";

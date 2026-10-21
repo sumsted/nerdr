@@ -13,6 +13,12 @@ import {
   webhookTestMessage,
   type WebhookSettings,
 } from "./webhook.js";
+import {
+  configureTelegram,
+  disableTelegram,
+  showTelegramStatus,
+  testTelegram,
+} from "./telegram.js";
 
 const VIEW_IDS = ["nerdr.agents", "nerdr.agentsPanel"];
 const STALE_CHECK_MS = 10_000;
@@ -404,6 +410,11 @@ export function activate(context: vscode.ExtensionContext): void {
       await context.secrets.delete("nerdr.webhook.token");
       void vscode.window.showInformationMessage("Nerdr: webhook token cleared.");
     }),
+
+    vscode.commands.registerCommand("nerdr.telegram.configure", () => configureTelegram(log)),
+    vscode.commands.registerCommand("nerdr.telegram.status", () => showTelegramStatus(log)),
+    vscode.commands.registerCommand("nerdr.telegram.test", () => testTelegram(log)),
+    vscode.commands.registerCommand("nerdr.telegram.disable", () => disableTelegram(log)),
   );
 
   context.subscriptions.push(

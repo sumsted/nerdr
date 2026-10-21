@@ -18,6 +18,22 @@ and limitations.
 - Click an agent (or run **Nerdr: Focus Agent Terminal**) to jump to its terminal
 - Agents are named after the workspace directory they were started in
   (duplicates get a session slug suffix)
+- Optional private Telegram chat bridge: reply to notifications to prompt agents,
+  and answer permission/question requests with buttons
+
+Telegram commands:
+
+- **Nerdr: Configure Telegram** — paste a @BotFather token, choose the private
+  chat and notification states, and send a test message
+- **Nerdr: Telegram Status** — show polling, event-stream, and pending-input
+  health
+- **Nerdr: Test Telegram** — send another test message
+- **Nerdr: Disable Telegram** — stop polling while keeping the configuration
+
+The Telegram bridge uses long polling inside the OpenCode plugin, so it needs no
+VPS, tunnel, or public webhook. Only the OpenCode instance that binds
+`127.0.0.1:49377` polls; all other locations retry quietly. Configuration lives
+in `~/.nerdr/telegram.json` with mode `0600`.
 
 Requires the matching OpenCode plugin: copy `nerdr.js` into
 `~/.config/opencode/plugins/` (see the root README).
