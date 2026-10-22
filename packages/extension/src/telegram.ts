@@ -228,6 +228,31 @@ function describeNotifyStates(states: TelegramNotifyState[]): string {
   return states.length > 0 ? states.join(", ") : "none";
 }
 
+async function promptManualChatId(
+  existing: TelegramConfig | undefined,
+): Promise<number | undefined> {
+  const value = await vscode.window.showInputBox({
+    title: "Nerdr Telegram",
+    prompt: "Telegram chat ID (digits only; private chat ids are positive)",
+    value: existing?.allowedChatIds[0]?.toString() ?? "",
+    placeHolder: "123456789",
+    ignoreFocusOut: true,
+    validateInput: (input) => {
+      const normalized = input.trim().replace(/[\s,]/g, "");
+      if (!normalized) return "A chat ID is required.";
+      if (!/^-?\d+$/.test(normalized)) {
+        return "Enter digits only, for example 123456789 (no @, spaces, or commas).";
+      }
+      if (!Number.isSafeInteger(Number(normalized))) {
+        return "That chat ID is too large.";
+      }
+      return undefined;
+    },
+  });
+  if (value === undefined) return undefined;
+  return Number(value.trim().replace(/[\s,]/g, ""));
+}
+
 async function promptChatId(
   token: string,
   existing: TelegramConfig | undefined,
@@ -237,6 +262,12 @@ async function promptChatId(
   if (found.error) {
     log(`telegram: chat detection unavailable: ${found.error}`);
   }
+  if (found.chats.length === 0) {
+    // Avoid a one-item QuickPick: typing into its filter swallows the chat ID
+    // and Enter has nothing to select. Go straight to the input box.
+    return promptManualChatId(existing);
+  }
+
   const manualLabel = "Enter chat ID manually…";
   const items: Array<{ label: string; description?: string; chatId?: number }> = found.chats.map(
     (chat) => ({
@@ -251,28 +282,12 @@ async function promptChatId(
     title: "Nerdr Telegram",
     placeHolder: existing?.allowedChatIds[0]
       ? `Chat ${existing.allowedChatIds[0]} (choose or enter another)`
-      : "Send /start to the bot, then choose the chat",
+      : "Choose the chat, or select “Enter chat ID manually…”",
     ignoreFocusOut: true,
   });
   if (!picked) return undefined;
   if (picked.chatId !== undefined) return picked.chatId;
-
-  const value = await vscode.window.showInputBox({
-    title: "Nerdr Telegram",
-    prompt: "Telegram chat ID (private chat ids are positive)",
-    value: existing?.allowedChatIds[0]?.toString() ?? "",
-    placeHolder: "123456789",
-    ignoreFocusOut: true,
-    validateInput: (input) => {
-      const trimmed = input.trim();
-      if (!trimmed) return "A chat ID is required.";
-      const id = Number(trimmed);
-      if (!Number.isSafeInteger(id)) return "Chat ID must be an integer.";
-      return undefined;
-    },
-  });
-  if (value === undefined) return undefined;
-  return Number(value.trim());
+  return promptManualChatId(existing);
 }
 
 export async function configureTelegram(log: (message: string) => void): Promise<void> {
