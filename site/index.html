@@ -4,10 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Nerdr — Herdr-like agent awareness for OpenCode in VSCodium</title>
-  <meta name="description" content="Nerdr watches every OpenCode agent in your VSCodium terminals, shows what state each one is in, and rings a bell when one needs you." />
+  <meta name="description" content="Nerdr watches every OpenCode agent in your VSCodium terminals, shows what state each one is in, rings a bell when one needs you, and lets you supervise from a private Telegram chat." />
   <meta name="color-scheme" content="dark" />
   <meta property="og:title" content="Nerdr" />
-  <meta property="og:description" content="Herdr-like agent awareness for OpenCode agents running in VSCodium." />
+  <meta property="og:description" content="Herdr-like agent awareness for OpenCode agents running in VSCodium, with optional Telegram control." />
   <meta property="og:type" content="website" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
   <link rel="stylesheet" href="styles.css" />
@@ -36,6 +36,7 @@
       <nav class="nav-links" aria-label="Primary">
         <a href="#features">Features</a>
         <a href="#how">How it works</a>
+        <a href="#telegram">Telegram</a>
         <a href="#install">Install</a>
         <a class="btn btn-ghost" href="https://github.com/sumsted/nerdr">GitHub</a>
       </nav>
@@ -53,7 +54,8 @@
           <p class="lede">
             Nerdr watches every OpenCode agent in your VSCodium terminals, shows
             each one's state at a glance, and rings a bell when one blocks — or
-            when a <code>build</code>/<code>plan</code> agent finishes.
+            when a <code>build</code>/<code>plan</code> agent finishes. Optionally,
+            keep supervising from a private Telegram chat.
           </p>
           <div class="hero-cta">
             <a class="btn btn-primary" href="#install">Install</a>
@@ -62,7 +64,8 @@
           <ul class="hero-points">
             <li>Live roster in the activity bar &amp; bottom panel</li>
             <li>Attention bells with per-agent cooldown</li>
-            <li>Webhook alerts to your own relay (Telegram, email, SMS)</li>
+            <li>Native Telegram control — reply, approve, switch modes</li>
+            <li>Webhook alerts to your own relay</li>
             <li>Click to jump to the owning terminal</li>
           </ul>
         </div>
@@ -128,7 +131,14 @@
               <svg viewBox="0 0 24 24"><path d="M12 3a5 5 0 0 0-5 5v3.2L5.4 14.4A1 1 0 0 0 6.3 16h11.4a1 1 0 0 0 .9-1.6L17 11.2V8a5 5 0 0 0-5-5Z"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>
             </span>
             <h3>Attention bells</h3>
-            <p>Rings a tone and POSTs to your webhook when an agent blocks, errors, or finishes.</p>
+            <p>Rings a tone when an agent blocks, errors, or finishes, with a per-agent cooldown.</p>
+          </article>
+          <article class="card">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            </span>
+            <h3>Telegram control</h3>
+            <p>Reply to notifications to prompt agents, answer permissions and questions with buttons, and switch Plan/Build with <code>/mode</code>. Long polling only — no VPS or inbound port.</p>
           </article>
           <article class="card">
             <span class="card-icon" aria-hidden="true">
@@ -153,10 +163,17 @@
           </article>
           <article class="card">
             <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+            </span>
+            <h3>Webhook relay</h3>
+            <p>POST a one-line alert to your own endpoint for email, SMS, a dashboard, or another relay.</p>
+          </article>
+          <article class="card">
+            <span class="card-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
             </span>
             <h3>Local &amp; private</h3>
-            <p>State travels over a loopback socket with a per-run token. Nothing leaves your machine.</p>
+            <p>State travels over a loopback socket with a per-run token. Telegram uses long polling and stores its token locally.</p>
           </article>
         </div>
       </div>
@@ -166,7 +183,7 @@
     <section class="section section-alt" id="how">
       <div class="container">
         <h2 class="section-title">Two pieces, one loopback socket</h2>
-        <p class="section-sub">An OpenCode plugin streams lifecycle state; the VSCodium extension aggregates, renders, and rings.</p>
+        <p class="section-sub">An OpenCode plugin streams lifecycle state; the VSCodium extension aggregates, renders, and rings. The same plugin can also bridge a private Telegram chat.</p>
 
         <div class="flow">
           <div class="flow-node">
@@ -180,11 +197,54 @@
           </div>
         </div>
 
+        <p class="flow-note">
+          Optional Telegram bridge: the plugin long-polls the Bot API directly,
+          so notifications, replies, permissions, questions, and mode switches
+          work without a webhook, tunnel, or inbound port.
+        </p>
+
         <ol class="steps">
           <li><span class="step-num">1</span><div><h4>Run OpenCode</h4><p>Start agents in your VSCodium integrated terminals, as usual.</p></div></li>
           <li><span class="step-num">2</span><div><h4>Watch the roster</h4><p>Each agent appears with a live state and, when needed, a bell.</p></div></li>
           <li><span class="step-num">3</span><div><h4>Act fast</h4><p>Click the blocked agent and answer it — no pane-by-pane hunting.</p></div></li>
         </ol>
+      </div>
+    </section>
+
+    <!-- Telegram -->
+    <section class="section section-alt" id="telegram">
+      <div class="container">
+        <h2 class="section-title">Supervise from Telegram</h2>
+        <p class="section-sub">Optional, private, and loopback-safe. Keep an eye on agents and answer them from your phone.</p>
+
+        <div class="install-grid">
+          <div class="install-block">
+            <h3>What you can do</h3>
+            <ul class="check-list">
+              <li>Reply to any notification to prompt that agent.</li>
+              <li>Approve or deny permissions and answer questions with buttons.</li>
+              <li>Switch Plan/Build with <code>/mode</code>.</li>
+              <li>Receive the final assistant text when a turn completes.</li>
+            </ul>
+          </div>
+          <div class="install-block">
+            <h3>Chat commands</h3>
+            <pre><code>/agents   list agents
+/use ...  select an agent
+/mode ... switch Plan/Build
+/status   active agent and mode
+/stop     interrupt the active agent
+/help     all commands</code></pre>
+          </div>
+        </div>
+
+        <div class="install-note">
+          <p>Run <strong>Nerdr: Configure Telegram</strong> to paste a @BotFather
+          token and pick your private chat. The token stays in
+          <code>~/.nerdr/telegram.json</code> with mode <code>0600</code>. The
+          bridge runs inside the OpenCode plugin and uses long polling, so there
+          is no public URL, webhook, or inbound port.</p>
+        </div>
       </div>
     </section>
 
@@ -214,8 +274,9 @@ cp packages/opencode-plugin/dist/nerdr.js \
         </div>
 
         <div class="install-note">
-          <p>Then reload the VSCodium window and restart the OpenCode 2.x service
-          (<code>opencode service restart</code>) so the plugin loads.</p>
+          <p>Then reload the VSCodium window. OpenCode usually picks up plugin
+          changes automatically; if the new commands are missing, restart the
+          OpenCode 2.x service (<code>opencode service restart</code>).</p>
         </div>
       </div>
     </section>
@@ -257,6 +318,7 @@ cp packages/opencode-plugin/dist/nerdr.js \
       <nav class="footer-links" aria-label="Footer">
         <a href="#features">Features</a>
         <a href="#how">How it works</a>
+        <a href="#telegram">Telegram</a>
         <a href="#install">Install</a>
         <a href="https://github.com/sumsted/nerdr">GitHub</a>
       </nav>

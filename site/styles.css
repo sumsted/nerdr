@@ -334,6 +334,30 @@ code {
   color: var(--accent);
   padding: 0 6px;
 }
+.flow-note {
+  margin: -26px 0 44px;
+  color: var(--muted);
+  font-size: 14px;
+  max-width: 760px;
+}
+.check-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.check-list li { padding-left: 22px; position: relative; }
+.check-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-weight: 700;
+}
 
 .steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .steps li { display: flex; gap: 14px; }

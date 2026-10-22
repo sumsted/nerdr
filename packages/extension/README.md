@@ -30,6 +30,10 @@ Telegram commands:
 - **Nerdr: Test Telegram** — send another test message
 - **Nerdr: Disable Telegram** — stop polling while keeping the configuration
 
+Chat commands: `/agents`, `/use`, `/mode`, `/status`, `/stop`, and `/help`.
+`/mode` switches the active session between OpenCode agents such as Plan and
+Build.
+
 The Telegram bridge uses long polling inside the OpenCode plugin, so it needs no
 VPS, tunnel, or public webhook. Only the OpenCode instance that binds
 `127.0.0.1:49377` polls; all other locations retry quietly. Configuration lives

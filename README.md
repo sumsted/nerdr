@@ -34,8 +34,10 @@ process, so Nerdr identifies agents by workspace directory rather than by OS
 process.
 
 The same OpenCode plugin can also bridge a private Telegram chat to those
-agents over long polling. It needs no VPS, public URL, tunnel, or inbound port;
-see [Telegram](#telegram-native).
+agents over long polling. Reply to a notification to prompt that agent, answer
+permissions and questions with buttons, switch Plan/Build with `/mode`, and get
+the final assistant text when a turn finishes. It needs no VPS, public URL,
+tunnel, or inbound port; see [Telegram](#telegram-native).
 
 ## Requirements
 
