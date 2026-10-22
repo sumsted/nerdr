@@ -143,6 +143,7 @@ export class TelegramApi {
       commands: [
         { command: "agents", description: "List agents" },
         { command: "use", description: "Select an agent" },
+        { command: "mode", description: "Show or change the Plan/Build mode" },
         { command: "status", description: "Show the active agent" },
         { command: "stop", description: "Interrupt the active agent" },
         { command: "help", description: "Show commands" },

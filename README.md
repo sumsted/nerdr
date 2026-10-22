@@ -252,6 +252,7 @@ replies with the chat ID when an unauthorized chat messages it.
 | --- | --- |
 | `/agents` | List agents, with buttons to select one |
 | `/use <name\|number\|session>` | Select an agent by directory name, list number, or session id |
+| `/mode [name]` | Show or switch the active session's OpenCode mode (for example Plan or Build) |
 | `/status` | Show the active agent and pending permissions/questions |
 | `/stop` | Interrupt the active agent |
 | `/help` | Show the command list |
@@ -261,6 +262,10 @@ agent. A plain message goes to the active agent, or the one you selected with
 `/use`. Prompts are queued with OpenCode's `delivery: "queue"`: if the agent is
 busy, wait for it to finish or use `/stop`. Replying with text to a permission
 message denies it and passes your text as the denial reason.
+
+Use `/mode` to switch the active session between OpenCode agents such as Plan and
+Build. The change applies to the session's next turn, exactly like switching in
+the TUI, and buttons mark the current mode.
 
 Default notifications are `blocked`, `done`, and `error`; `working` is available
 but intentionally not the default. The final-text notification is sent once per

@@ -73,6 +73,7 @@ export function renderHelp(botUsername?: string): string {
     `Reply to any notification to send a prompt to that agent, or use:`,
     `/agents — list agents`,
     `/use <name|number|session> — select an agent`,
+    `/mode [name] — show or change the Plan/Build mode`,
     `/status — show the active agent`,
     `/stop — interrupt the active agent`,
     `/help — this message`,
@@ -100,6 +101,22 @@ export function renderAgents(
   return { text: lines.join("\n"), keyboard: { inline_keyboard: buttons } };
 }
 
+export function renderModes(
+  info: TelegramSessionInfo,
+  agents: Array<{ id: string; name: string }>,
+): { text: string; keyboard?: TelegramInlineKeyboard } {
+  if (agents.length === 0) {
+    return { text: `No modes are available for ${agentName(info)}.` };
+  }
+  const current = agents.find((agent) => agent.id === info.agent)?.name ?? info.agent ?? "unknown";
+  const lines = [`Mode for ${agentName(info)}: ${current}`, ""];
+  const buttons: TelegramInlineButton[][] = agents.map((agent) => [
+    button(`${agent.name}${agent.id === info.agent ? " ✓" : ""}`, `mode:${agent.id}`),
+  ]);
+  lines.push("Tap a mode or use /mode <name>.");
+  return { text: lines.join("\n"), keyboard: { inline_keyboard: buttons } };
+}
+
 export function renderStatus(
   info: TelegramSessionInfo,
   pendingPermissions: number,
@@ -107,6 +124,7 @@ export function renderStatus(
 ): string {
   const lines = [
     `Agent: ${agentName(info)}`,
+    `Mode: ${info.agent || "unknown"}`,
     `Status: ${statusWord(info.status)}`,
     `Session: ${info.id}`,
   ];

@@ -24,6 +24,14 @@ export interface OpencodeSession {
   time?: { created?: number; updated?: number };
 }
 
+export interface OpencodeAgent {
+  id: string;
+  name: string;
+  mode?: string;
+  hidden?: boolean;
+  description?: string;
+}
+
 export interface OpencodePermission {
   id: string;
   sessionID: string;
@@ -199,6 +207,23 @@ export class OpencodeClient {
     });
     if (!body.data) throw new OpencodeError(`Session not found: ${sessionID}`, 404);
     return body.data;
+  }
+
+  async listAgents(directory?: string, signal?: AbortSignal): Promise<OpencodeAgent[]> {
+    const query = directory
+      ? `?location%5Bdirectory%5D=${encodeURIComponent(directory)}`
+      : "";
+    const body = await this.request<{ data?: OpencodeAgent[] }>(`/api/agent${query}`, {
+      signal,
+    });
+    return Array.isArray(body.data) ? body.data : [];
+  }
+
+  async switchAgent(sessionID: string, agentID: string): Promise<void> {
+    await this.request<unknown>(this.sessionPath(sessionID, "/agent"), {
+      method: "POST",
+      body: JSON.stringify({ agent: agentID }),
+    });
   }
 
   async prompt(sessionID: string, text: string, delivery: "queue" | "steer" = "queue"): Promise<void> {

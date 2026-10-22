@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { TelegramConfig } from "@nerdr/protocol";
 import { TelegramApi, TelegramApiError, type TelegramCallbackQuery, type TelegramInlineKeyboard, type TelegramMessage, type TelegramUpdate } from "./telegramApi.js";
-import { OpencodeClient, OpencodeError, type OpencodeEvent, type OpencodeForm, type OpencodeFormField, type OpencodePermission, type OpencodeSession } from "./opencode.js";
+import { OpencodeClient, OpencodeError, type OpencodeAgent, type OpencodeEvent, type OpencodeForm, type OpencodeFormField, type OpencodePermission, type OpencodeSession } from "./opencode.js";
 import { TelegramStateStore, type TelegramFormValue, type TelegramQuestionField, type TelegramQuestionRef, type TelegramSessionInfo } from "./state.js";
 import {
   agentName,
@@ -12,6 +12,7 @@ import {
   renderError,
   renderHelp,
   renderInterrupted,
+  renderModes,
   renderPermission,
   renderQuestion,
   renderQuestionAnswered,
@@ -446,6 +447,14 @@ export class TelegramBot {
       });
       return;
     }
+    if (type === "session.agent.selected") {
+      if (!sessionID) return;
+      const agent = asString(data.agent);
+      if (!agent) return;
+      await this.ensureSession(sessionID, directory);
+      this.state.upsertSession({ id: sessionID, agent });
+      return;
+    }
     if (type === "location.shutdown") return;
     if (type === "form.created") {
       // The form payload carries its own session id; the envelope does not.
@@ -855,6 +864,9 @@ export class TelegramBot {
       case "use":
         await this.useAgent(chatId, argument);
         return;
+      case "mode":
+        await this.setMode(chatId, argument);
+        return;
       case "status":
         await this.showStatus(chatId);
         return;
@@ -974,6 +986,120 @@ export class TelegramBot {
     else await this.sendRaw(chatId, text);
   }
 
+  private async setMode(chatId: number, argument: string): Promise<void> {
+    const id = this.state.getActive(chatId);
+    if (!id) {
+      await this.sendRaw(chatId, "No active agent. Use /agents.");
+      return;
+    }
+    let info = this.state.getSession(id);
+    if (!info) info = await this.ensureSession(id);
+    info = await this.refreshSessionLocation(info);
+
+    let agents: OpencodeAgent[];
+    try {
+      agents = await this.availableModes(info);
+    } catch (error) {
+      await this.sendRaw(chatId, `Could not list modes: ${errorMessage(error)}`);
+      return;
+    }
+    if (agents.length === 0) {
+      await this.sendRaw(chatId, `No modes are available for ${agentName(info)}.`);
+      return;
+    }
+
+    const needle = argument.trim().toLowerCase();
+    if (!needle) {
+      await this.sendModeList(chatId, info, agents);
+      return;
+    }
+
+    const exact = agents.filter(
+      (agent) =>
+        agent.id.toLowerCase() === needle || agent.name.toLowerCase() === needle,
+    );
+    const matches =
+      exact.length > 0
+        ? exact
+        : agents.filter(
+            (agent) =>
+              agent.id.toLowerCase().includes(needle) ||
+              agent.name.toLowerCase().includes(needle),
+          );
+    if (matches.length === 0) {
+      await this.sendRaw(chatId, `No mode matched "${argument}".`, {
+        reply_markup: renderModes(info, agents).keyboard,
+      });
+      return;
+    }
+    if (matches.length > 1) {
+      await this.sendModeList(chatId, info, matches, "Multiple modes matched.");
+      return;
+    }
+    const target = matches[0];
+    if (!target) return;
+    await this.switchMode(chatId, info, target, agents);
+  }
+
+  private async sendModeList(
+    chatId: number,
+    info: SessionInfo,
+    agents: OpencodeAgent[],
+    preface?: string,
+  ): Promise<void> {
+    const rendered = renderModes(info, agents);
+    const text = preface ? `${preface}\n\n${rendered.text}` : rendered.text;
+    await this.sendRaw(chatId, text, { reply_markup: rendered.keyboard });
+  }
+
+  private async switchMode(
+    chatId: number,
+    info: SessionInfo,
+    target: OpencodeAgent,
+    agents: OpencodeAgent[],
+    edit?: { messageId: number },
+  ): Promise<void> {
+    if (info.agent !== target.id) {
+      try {
+        await this.opencode.switchAgent(info.id, target.id);
+      } catch (error) {
+        await this.sendRaw(
+          chatId,
+          `Could not switch to ${target.name}: ${errorMessage(error)}`,
+        );
+        return;
+      }
+    }
+    const updated = this.state.upsertSession({ id: info.id, agent: target.id });
+    const rendered = renderModes(updated, agents);
+    if (edit) {
+      await this.editMessage(chatId, edit.messageId, rendered.text, rendered.keyboard);
+    } else {
+      await this.sendRaw(chatId, rendered.text, { reply_markup: rendered.keyboard });
+    }
+  }
+
+  private async availableModes(info: SessionInfo): Promise<OpencodeAgent[]> {
+    const agents = await this.opencode.listAgents(info.directory);
+    return agents.filter(
+      (agent) =>
+        agent &&
+        typeof agent.id === "string" &&
+        agent.id.length > 0 &&
+        agent.mode !== "subagent" &&
+        agent.hidden !== true,
+    );
+  }
+
+  private async refreshSessionLocation(info: SessionInfo): Promise<SessionInfo> {
+    if (info.directory) return info;
+    try {
+      return this.upsertFromSession(await this.opencode.getSession(info.id));
+    } catch {
+      return info;
+    }
+  }
+
   private async showStatus(chatId: number): Promise<void> {
     const id = this.state.getActive(chatId);
     if (!id) {
@@ -1082,6 +1208,42 @@ export class TelegramBot {
       if (query.message) {
         await this.selectAgent(chatId, info, { messageId: query.message.message_id });
       }
+      return;
+    }
+    if (data.startsWith("mode:")) {
+      const agentID = data.slice(5);
+      const active = this.state.getActive(chatId);
+      if (!active) {
+        await this.answerCallback(query.id, "No active agent");
+        return;
+      }
+      let info = this.state.getSession(active);
+      if (!info) info = await this.ensureSession(active);
+      info = await this.refreshSessionLocation(info);
+      let agents: OpencodeAgent[];
+      try {
+        agents = await this.availableModes(info);
+      } catch (error) {
+        await this.answerCallback(query.id, "Could not list modes");
+        await this.sendRaw(chatId, `Could not list modes: ${errorMessage(error)}`);
+        return;
+      }
+      const target = agents.find((agent) => agent.id === agentID);
+      if (!target) {
+        await this.answerCallback(query.id, "Mode unavailable");
+        await this.sendRaw(chatId, "That mode is no longer available.", {
+          reply_markup: renderModes(info, agents).keyboard,
+        });
+        return;
+      }
+      await this.answerCallback(query.id, target.name);
+      await this.switchMode(
+        chatId,
+        info,
+        target,
+        agents,
+        query.message ? { messageId: query.message.message_id } : undefined,
+      );
       return;
     }
     if (data.startsWith("perm:")) {
