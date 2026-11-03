@@ -145,6 +145,7 @@ export class TelegramApi {
         { command: "use", description: "Select an agent" },
         { command: "mode", description: "Show or change the Plan/Build mode" },
         { command: "status", description: "Show the active agent" },
+        { command: "health", description: "Show Telegram and OpenCode health" },
         { command: "stop", description: "Interrupt the active agent" },
         { command: "help", description: "Show commands" },
       ],

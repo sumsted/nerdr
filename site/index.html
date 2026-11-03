@@ -138,7 +138,7 @@
               <svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             </span>
             <h3>Telegram control</h3>
-            <p>Reply to notifications to prompt agents, answer permissions and questions with buttons, and switch Plan/Build with <code>/mode</code>. Long polling only — no VPS or inbound port.</p>
+            <p>Reply to notifications to prompt agents, answer permissions and questions with buttons, and switch Plan/Build with <code>/mode</code>. A standalone local daemon keeps working when OpenCode stops. Long polling only — no VPS or inbound port.</p>
           </article>
           <article class="card">
             <span class="card-icon" aria-hidden="true">
@@ -183,7 +183,7 @@
     <section class="section section-alt" id="how">
       <div class="container">
         <h2 class="section-title">Two pieces, one loopback socket</h2>
-        <p class="section-sub">An OpenCode plugin streams lifecycle state; the VSCodium extension aggregates, renders, and rings. The same plugin can also bridge a private Telegram chat.</p>
+        <p class="section-sub">An OpenCode plugin streams lifecycle state; the VSCodium extension aggregates, renders, and rings. A separate local daemon can also bridge a private Telegram chat.</p>
 
         <div class="flow">
           <div class="flow-node">
@@ -198,9 +198,10 @@
         </div>
 
         <p class="flow-note">
-          Optional Telegram bridge: the plugin long-polls the Bot API directly,
-          so notifications, replies, permissions, questions, and mode switches
-          work without a webhook, tunnel, or inbound port.
+          Optional Telegram bridge: a standalone local daemon long-polls the Bot
+          API directly, so notifications, replies, permissions, questions, and
+          mode switches work without a webhook, tunnel, or inbound port — and keep
+          working when the OpenCode plugin stops.
         </p>
 
         <ol class="steps">
@@ -233,6 +234,7 @@
 /use ...  select an agent
 /mode ... switch Plan/Build
 /status   active agent and mode
+/health   daemon and OpenCode health
 /stop     interrupt the active agent
 /help     all commands</code></pre>
           </div>
@@ -242,8 +244,11 @@
           <p>Run <strong>Nerdr: Configure Telegram</strong> to paste a @BotFather
           token and pick your private chat. The token stays in
           <code>~/.nerdr/telegram.json</code> with mode <code>0600</code>. The
-          bridge runs inside the OpenCode plugin and uses long polling, so there
-          is no public URL, webhook, or inbound port.</p>
+          bridge is a standalone local daemon started and stopped from VSCodium.
+          It uses long polling, so there is no public URL, webhook, or inbound
+          port — and it keeps answering if the OpenCode plugin stops. There is no
+          boot service: after a reboot, run <strong>Nerdr: Start Telegram
+          Bridge</strong>.</p>
         </div>
       </div>
     </section>

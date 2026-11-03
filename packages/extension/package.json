@@ -2,7 +2,7 @@
   "name": "nerdr",
   "displayName": "Nerdr",
   "description": "Herdr-like awareness for OpenCode agents running in VSCodium terminals.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "nerdr",
   "license": "MIT",
   "icon": "media/nerdr.png",
@@ -26,7 +26,8 @@
     "dist",
     "media",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "bin"
   ],
   "scripts": {
     "build": "node esbuild.mjs",
@@ -104,6 +105,31 @@
       {
         "command": "nerdr.telegram.disable",
         "title": "Nerdr: Disable Telegram"
+      },
+      {
+        "command": "nerdr.telegram.start",
+        "title": "Nerdr: Start Telegram Bridge",
+        "icon": "$(play)"
+      },
+      {
+        "command": "nerdr.telegram.stop",
+        "title": "Nerdr: Stop Telegram Bridge",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "nerdr.telegram.restart",
+        "title": "Nerdr: Restart Telegram Bridge",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "nerdr.telegram.log",
+        "title": "Nerdr: Show Telegram Log",
+        "icon": "$(output)"
+      },
+      {
+        "command": "nerdr.telegram.manage",
+        "title": "Nerdr: Manage Telegram Bridge",
+        "icon": "$(gear)"
       }
     ],
     "viewsContainers": {
@@ -279,6 +305,16 @@
           "type": "boolean",
           "default": true,
           "description": "Append the short detail (e.g. a permission title) to the notification message."
+        },
+        "nerdr.telegram.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start the standalone Telegram bridge when VSCodium activates. Off by default, so a reboot requires a manual start."
+        },
+        "nerdr.telegram.stopOnExit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Stop the Telegram bridge when VSCodium exits. Off by default, so the bridge keeps running while the window is closed."
         }
       }
     }

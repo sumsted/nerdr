@@ -1,10 +1,11 @@
 /**
- * Telegram bridge configuration shared by the OpenCode plugin and the VSCodium
- * extension.
+ * Telegram bridge configuration shared by the standalone Nerdr daemon and the
+ * VSCodium extension.
  *
- * The bridge runs inside the OpenCode plugin and talks to Telegram directly
- * over long polling, so there is no public ingress, webhook, or relay host.
- * The extension only writes this config file and reads bridge health.
+ * The daemon talks to Telegram directly over long polling, so there is no
+ * public ingress, webhook, or relay host. It runs independently of OpenCode and
+ * VSCodium; the extension writes this config file, supervises the process, and
+ * reads bridge health.
  */
 
 import type { AgentStatus } from "./index.js";
@@ -35,7 +36,16 @@ export const TELEGRAM_STATE_FILE = "telegram-state.json";
 /** File name inside ~/.nerdr that stores bridge diagnostics. */
 export const TELEGRAM_LOG_FILE = "telegram.log";
 
-/** Loopback port used to elect a single Telegram poller across OpenCode locations. */
+/** File name inside ~/.nerdr that stores the loopback control token. */
+export const TELEGRAM_CONTROL_TOKEN_FILE = "telegram-control-token";
+
+/** File name inside ~/.nerdr that stores the daemon pid. */
+export const TELEGRAM_PID_FILE = "telegram.pid";
+
+/** Header required by mutating control endpoints. */
+export const TELEGRAM_CONTROL_HEADER = "x-nerdr-token";
+
+/** Loopback port used to elect a single Telegram poller across daemons. */
 export const DEFAULT_TELEGRAM_LEADER_PORT = 49377;
 
 /** Default loopback URL of the OpenCode API service. */
@@ -136,4 +146,59 @@ export function normalizeTelegramConfig(input: unknown): TelegramConfig | undefi
       ? clamp(Math.round(leaderPort), 1024, 65535)
       : DEFAULT_TELEGRAM_LEADER_PORT,
   };
+}
+
+/** Health of the local OpenCode HTTP service, as seen by the daemon. */
+export type OpencodeServiceState =
+  | "ok"
+  | "unreachable"
+  | "timeout"
+  | "unauthorized"
+  | "degraded"
+  | "unknown";
+
+export interface OpencodeServiceHealth {
+  state: OpencodeServiceState;
+  url: string;
+  lastProbeAt?: number;
+  lastOkAt?: number;
+  latencyMs?: number;
+  consecutiveFailures: number;
+  lastError?: string;
+  servicePid?: number;
+  serviceVersion?: string;
+}
+
+/** Telegram polling health, as seen by the daemon. */
+export interface TelegramBotHealth {
+  running: boolean;
+  botUsername?: string;
+  polling: boolean;
+  eventsConnected: boolean;
+  lastPollOkAt?: number;
+  lastUpdateAt?: number;
+  consecutiveTimeouts: number;
+  lastError?: string;
+  startedAt: number;
+  chatId?: number;
+  pendingPermissions: number;
+  pendingQuestions: number;
+}
+
+/** Response body of GET /health on the daemon control port. */
+export interface TelegramHealth {
+  ok: boolean;
+  leader: boolean;
+  pid: number;
+  startedAt: number;
+  leaderPort: number;
+  configPath: string;
+  configured: boolean;
+  enabled: boolean;
+  notifyStates: string[];
+  daemonVersion: string;
+  managedBy: "daemon" | "plugin";
+  bot?: TelegramBotHealth;
+  opencode: OpencodeServiceHealth;
+  error?: string;
 }

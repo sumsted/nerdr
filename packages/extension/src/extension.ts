@@ -16,9 +16,20 @@ import {
 import {
   configureTelegram,
   disableTelegram,
+  readTelegramConfig,
   showTelegramStatus,
   testTelegram,
 } from "./telegram.js";
+import {
+  initTelegramStatus,
+  manageTelegram,
+  openTelegramLog,
+  restartTelegramDaemon,
+  startTelegramDaemon,
+  stopTelegramDaemon,
+  telegramAutoStart,
+  telegramStopOnExit,
+} from "./telegramService.js";
 
 const VIEW_IDS = ["nerdr.agents", "nerdr.agentsPanel"];
 const STALE_CHECK_MS = 10_000;
@@ -27,6 +38,20 @@ let output: vscode.OutputChannel;
 
 function log(message: string): void {
   output?.appendLine(`[${new Date().toISOString()}] ${message}`);
+}
+
+async function runTelegramAction(
+  label: string,
+  action: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await action();
+    void vscode.window.showInformationMessage(`Nerdr: ${label}.`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    log(`telegram action failed: ${message}`);
+    void vscode.window.showErrorMessage(`Nerdr: ${label} failed — ${message}`);
+  }
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -415,6 +440,17 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("nerdr.telegram.status", () => showTelegramStatus(log)),
     vscode.commands.registerCommand("nerdr.telegram.test", () => testTelegram(log)),
     vscode.commands.registerCommand("nerdr.telegram.disable", () => disableTelegram(log)),
+    vscode.commands.registerCommand("nerdr.telegram.start", () =>
+      runTelegramAction("Telegram bridge started", () => startTelegramDaemon(log)),
+    ),
+    vscode.commands.registerCommand("nerdr.telegram.stop", () =>
+      runTelegramAction("Telegram bridge stopped", () => stopTelegramDaemon(log)),
+    ),
+    vscode.commands.registerCommand("nerdr.telegram.restart", () =>
+      runTelegramAction("Telegram bridge restarted", () => restartTelegramDaemon(log)),
+    ),
+    vscode.commands.registerCommand("nerdr.telegram.log", () => openTelegramLog()),
+    vscode.commands.registerCommand("nerdr.telegram.manage", () => manageTelegram(log)),
   );
 
   context.subscriptions.push(
@@ -435,9 +471,25 @@ export function activate(context: vscode.ExtensionContext): void {
   renderStatusBar();
   updateEmptyMessage();
   void startServer(config.port).then(() => locator.refresh());
+  initTelegramStatus(context, log);
+  const telegramConfig = readTelegramConfig();
+  if (telegramConfig?.enabled && telegramAutoStart()) {
+    void startTelegramDaemon(log).catch((error) =>
+      log(
+        `telegram autostart failed: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    );
+  }
   log("Nerdr activated");
 }
 
-export function deactivate(): void {
-  // Disposables registered in context handle teardown.
+export async function deactivate(): Promise<void> {
+  if (!telegramStopOnExit()) return;
+  try {
+    await stopTelegramDaemon(log);
+  } catch (error) {
+    log(
+      `telegram stop-on-exit failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }

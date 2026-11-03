@@ -78,6 +78,7 @@ function serviceFileCandidates(): string[] {
   const candidates: string[] = [];
   if (process.env.OPENCODE_SERVICE_FILE) candidates.push(process.env.OPENCODE_SERVICE_FILE);
   candidates.push(path.join(os.homedir(), ".config", "opencode", "service.json"));
+  candidates.push(path.join(os.homedir(), ".local", "state", "opencode", "service.json"));
   return candidates;
 }
 
@@ -92,6 +93,28 @@ function readServicePassword(): string | undefined {
   }
   const env = process.env.OPENCODE_PASSWORD;
   return env && env.trim() ? env.trim() : undefined;
+}
+
+export interface OpencodeServiceMeta {
+  pid?: number;
+  version?: string;
+  url?: string;
+}
+
+/** Read pid/version/url from whichever service file OpenCode maintains. */
+export function readServiceMeta(): OpencodeServiceMeta {
+  const meta: OpencodeServiceMeta = {};
+  for (const file of serviceFileCandidates()) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+      if (meta.pid === undefined && typeof raw.pid === "number") meta.pid = raw.pid;
+      if (meta.version === undefined && typeof raw.version === "string") meta.version = raw.version;
+      if (meta.url === undefined && typeof raw.url === "string") meta.url = raw.url;
+    } catch {
+      // Try the next location.
+    }
+  }
+  return meta;
 }
 
 /**
@@ -113,6 +136,8 @@ export class OpencodeClient {
     if (!this.password) {
       throw new OpencodeError(
         "OpenCode API password not found (expected ~/.config/opencode/service.json)",
+        401,
+        "NoCredentials",
       );
     }
     return this.password;
@@ -191,6 +216,18 @@ export class OpencodeClient {
       { signal },
     );
     return Object.keys(body.data ?? {});
+  }
+
+  /**
+   * Cheap liveness probe. Returns latency in milliseconds. Throws the same
+   * errors as every other request; the health monitor classifies them.
+   */
+  async probe(timeoutMs = 5000): Promise<number> {
+    const started = Date.now();
+    await this.request<{ data?: Record<string, unknown> }>("/api/session/active", {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return Date.now() - started;
   }
 
   async listSessions(limit = 30, signal?: AbortSignal): Promise<OpencodeSession[]> {
