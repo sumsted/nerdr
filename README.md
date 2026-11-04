@@ -68,12 +68,17 @@ npm run typecheck
 
 ## Install the extension
 
-Package the extension:
+Package the extension (the build must run first so the daemon bundle exists):
 
 ```bash
+npm run build
 npm run package -w nerdr
 # -> packages/extension/nerdr-0.2.0.vsix
 ```
+
+If you run only `npm run package -w nerdr`, the build output and
+`packages/extension/bin/nerdr-telegram.mjs` may be missing and the VSIX will not
+contain the Telegram daemon.
 
 Then install the VSIX, either from the VSCodium UI
 (**Extensions → "..." → Install from VSIX...**) or from a terminal:
@@ -134,6 +139,64 @@ Order does not matter: the plugin discovers the bridge file on every reconnect.
 OpenCode 2.0 hot-reloads many changes, but if a running session keeps the old copy
 in memory, `opencode service restart` (or restart the session) picks up the new one.
 
+## Install checklist
+
+For a fresh machine, run these in order. The new plugin intentionally does **not**
+start Telegram; the daemon is a separate process managed from VSCodium.
+
+1. Build and package:
+   ```bash
+   npm install
+   npm run build
+   npm run package -w nerdr
+   ```
+   `npm run build` must run before packaging. It produces
+   `packages/opencode-plugin/dist/nerdr.js` and copies the daemon bundle to
+   `packages/extension/bin/nerdr-telegram.mjs`.
+2. Install `packages/extension/nerdr-0.2.0.vsix` (see above).
+3. Copy the plugin bundle:
+   ```bash
+   mkdir -p ~/.config/opencode/plugins
+   cp packages/opencode-plugin/dist/nerdr.js ~/.config/opencode/plugins/nerdr.js
+   ```
+4. Reload VSCodium: **Developer: Reload Window**. If OpenCode keeps the old
+   plugin loaded, restart it once (`opencode service restart`, which interrupts
+   running agents, or restart the session). After reload, the Command Palette
+   should list **Nerdr: Start Telegram Bridge**; if it does not, the old
+   extension is still active.
+5. Configure and start Telegram. **Nerdr: Configure Telegram** writes the config,
+   deploys the daemon to `~/.nerdr/nerdr-telegram.mjs`, and starts it. If it is
+   already configured, run **Nerdr: Start Telegram Bridge**.
+6. Verify the daemon:
+   ```bash
+   curl -s http://127.0.0.1:49377/health | python3 -m json.tool
+   ```
+   Expect `"managedBy": "daemon"`, `"daemonVersion": "0.2.0"`, and
+   `"opencode": { "state": "ok", ... }`.
+7. In Telegram, send `/help`, `/agents`, `/status`, and `/health`.
+
+## Upgrade from 0.1.x
+
+The Telegram poller moved out of the OpenCode plugin and into a standalone
+daemon. Installing the new VSIX and copying the plugin is **not enough**: the
+new plugin no longer starts Telegram, so the bot stays silent until the daemon is
+started.
+
+1. Install the 0.2.0 VSIX.
+2. Copy the new `nerdr.js` to `~/.config/opencode/plugins/nerdr.js`.
+3. Reload VSCodium.
+4. Run **Nerdr: Start Telegram Bridge** (or **Nerdr: Configure Telegram**).
+   Start may report that port `49377` is held until the old plugin releases it;
+   the daemon is already running and waiting.
+5. If the old plugin still owns `127.0.0.1:49377`, the new daemon waits and
+   retries. Let OpenCode hot-reload the new plugin; if it does not, run
+   `opencode service restart` once. The daemon binds automatically when the port
+   frees.
+6. Confirm with `curl -s http://127.0.0.1:49377/health` and `/agents` in Telegram.
+
+If the status bar shows `Nerdr Telegram` as stopped, the daemon is not running.
+Open **Nerdr: Manage Telegram Bridge** and choose **Start**.
+
 ## Verify it works
 
 1. Reload the VSCodium window (**Developer: Reload Window**).
@@ -144,6 +207,9 @@ in memory, `opencode service restart` (or restart the session) picks up the new 
 5. Send a prompt (state goes `working`); ask something that needs your input
    (`needs input` + attention bell); let it finish (`done`, plus a completion bell
    for `build`/`plan`).
+6. If Telegram is configured, run **Nerdr: Start Telegram Bridge**. The status
+   bar should show `Nerdr Telegram`, and `/agents` and `/health` should reply in
+   the chat. The bot does not require the OpenCode plugin to be alive.
 
 ## State model
 
@@ -296,6 +362,26 @@ Default notifications are `blocked`, `done`, and `error`; `working` is available
 but intentionally not the default. The final-text notification is sent once per
 completed turn.
 
+### Start and stop the daemon
+
+VSCodium manages the process; there is no systemd/launchd unit.
+
+| Action | Command |
+| --- | --- |
+| Start | **Nerdr: Start Telegram Bridge** |
+| Stop | **Nerdr: Stop Telegram Bridge** |
+| Restart | **Nerdr: Restart Telegram Bridge** |
+| Status | **Nerdr: Telegram Status** |
+| Log | **Nerdr: Show Telegram Log** |
+| All of the above | **Nerdr: Manage Telegram Bridge** |
+
+- `nerdr.telegram.autoStart` (default `false`) starts the daemon when VSCodium
+  activates.
+- `nerdr.telegram.stopOnExit` (default `false`) stops it when VSCodium exits.
+  Leave it off to keep the bot reachable while the window is closed.
+- Closing VSCodium does not stop a running daemon.
+- After a reboot, start it manually from VSCodium.
+
 ### Runtime files and the daemon
 
 | Path | Purpose |
@@ -438,6 +524,10 @@ timeouts and never marks a workspace offline based on process scans.
   (e.g. `nerdr · tidy-falcon`).
 - **Port already in use.** The extension automatically tries the next free port
   and advertises it in `~/.nerdr/bridge.json`; the plugin follows.
+- **Bot is silent after upgrading to 0.2.0.** Installing the VSIX and copying
+  the plugin does not start Telegram. Run **Nerdr: Start Telegram Bridge** (or
+  **Nerdr: Manage Telegram Bridge**). The daemon, not the plugin, owns polling
+  now.
 - **Telegram bot ignores messages.** Run **Nerdr: Telegram Status**. Confirm the
   daemon is running, the bot is polling, and the configured chat ID matches the
   private chat. Check **Nerdr: Show Telegram Log**. If the status says OpenCode is
@@ -448,6 +538,20 @@ timeouts and never marks a workspace offline based on process scans.
   (`opencode service restart`; this interrupts running agents) so the old plugin
   releases `49377`. The daemon binds automatically when the port frees, without
   a VSCodium reload. The status dialog reports the pid when one is available.
+- **The extension cannot start the daemon.** Check **Nerdr: Show Telegram Log**
+  first. As a manual fallback, run the bundle that ships inside the installed
+  extension:
+  ```bash
+  # macOS: run in the background
+  cp ~/.vscode-oss/extensions/nerdr.nerdr-0.2.0/bin/nerdr-telegram.mjs ~/.nerdr/
+  chmod 700 ~/.nerdr/nerdr-telegram.mjs
+  nohup env NERDR_HOME="$HOME/.nerdr" ELECTRON_RUN_AS_NODE=1 \
+    "/Applications/VSCodium.app/Contents/MacOS/VSCodium" \
+    ~/.nerdr/nerdr-telegram.mjs >> ~/.nerdr/telegram.log 2>&1 &
+  ```
+  On Linux, use the same command with your VSCodium binary (for example
+  `/usr/share/codium/codium`). The extension can still see, stop, and restart
+  that process through `/health` and the pid file.
 - **Telegram `getUpdates` conflict (409).** A webhook or another poller still
   owns the token. Stop the old gateway and delete its webhook. Nerdr retries and
   calls `deleteWebhook` on startup, but it cannot win against a poller that keeps
