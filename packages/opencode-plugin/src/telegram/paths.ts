@@ -3,7 +3,9 @@ import * as path from "node:path";
 import {
   BRIDGE_DIRNAME,
   TELEGRAM_CONFIG_FILE,
+  TELEGRAM_CONTROL_TOKEN_FILE,
   TELEGRAM_LOG_FILE,
+  TELEGRAM_PID_FILE,
   TELEGRAM_STATE_FILE,
 } from "@nerdr/protocol";
 
@@ -22,4 +24,12 @@ export function telegramStatePath(): string {
 
 export function telegramLogPath(): string {
   return path.join(nerdrHome(), TELEGRAM_LOG_FILE);
+}
+
+export function telegramControlTokenPath(): string {
+  return path.join(nerdrHome(), TELEGRAM_CONTROL_TOKEN_FILE);
+}
+
+export function telegramPidPath(): string {
+  return path.join(nerdrHome(), TELEGRAM_PID_FILE);
 }

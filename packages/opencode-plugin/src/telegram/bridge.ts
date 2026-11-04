@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
-import type { TelegramConfig } from "@nerdr/protocol";
+import type { OpencodeServiceHealth, TelegramConfig } from "@nerdr/protocol";
 import { TelegramApi, TelegramApiError, type TelegramCallbackQuery, type TelegramInlineKeyboard, type TelegramMessage, type TelegramUpdate } from "./telegramApi.js";
 import { OpencodeClient, OpencodeError, type OpencodeAgent, type OpencodeEvent, type OpencodeForm, type OpencodeFormField, type OpencodePermission, type OpencodeSession } from "./opencode.js";
 import { TelegramStateStore, type TelegramFormValue, type TelegramQuestionField, type TelegramQuestionRef, type TelegramSessionInfo } from "./state.js";
+import { describeOpencodeState, type ServiceHealth } from "./health.js";
 import {
   agentName,
   chunkText,
@@ -108,7 +109,9 @@ export interface TelegramBotStatus {
   botUsername?: string;
   polling: boolean;
   eventsConnected: boolean;
+  lastPollOkAt?: number;
   lastUpdateAt?: number;
+  consecutiveTimeouts: number;
   lastError?: string;
   startedAt: number;
   chatId?: number;
@@ -133,7 +136,9 @@ export class TelegramBot {
   private stopped = false;
   private polling = false;
   private eventsConnected = false;
+  private lastPollOkAt?: number;
   private lastUpdateAt?: number;
+  private consecutiveTimeouts = 0;
   private lastError?: string;
   private botUsername?: string;
   private readonly startedAt = Date.now();
@@ -144,14 +149,22 @@ export class TelegramBot {
   constructor(
     private readonly config: TelegramConfig,
     private readonly state: TelegramStateStore,
+    private readonly health?: ServiceHealth,
   ) {
     this.api = new TelegramApi(config.botToken);
     this.opencode = new OpencodeClient(config.apiUrl);
   }
 
   async start(): Promise<void> {
-    const me = await this.api.getMe();
-    this.botUsername = me.username;
+    try {
+      const me = await this.api.getMe();
+      this.botUsername = me.username;
+    } catch (error) {
+      // A slow identity lookup must not block polling. The bot can run
+      // without the username; resolve it in the background instead.
+      telegramLog(`getMe failed; starting polling anyway: ${errorMessage(error)}`);
+      void this.refreshIdentity();
+    }
     try {
       await this.api.deleteWebhook();
     } catch (error) {
@@ -162,9 +175,24 @@ export class TelegramBot {
     } catch (error) {
       telegramLog(`setMyCommands failed: ${errorMessage(error)}`);
     }
-    telegramLog(`Telegram bot @${this.botUsername ?? me.id} started`);
+    telegramLog(`Telegram bot @${this.botUsername ?? "unknown"} started`);
     this.pollPromise = this.pollLoop();
     this.eventPromise = this.eventLoop();
+  }
+
+  private async refreshIdentity(): Promise<void> {
+    for (let attempt = 0; attempt < 6 && !this.stopped; attempt += 1) {
+      await sleep(5_000 + attempt * 5_000);
+      if (this.stopped) return;
+      try {
+        const me = await this.api.getMe();
+        this.botUsername = me.username;
+        telegramLog(`Telegram bot identity resolved: @${me.username ?? me.id}`);
+        return;
+      } catch {
+        // Try again with a wider gap.
+      }
+    }
   }
 
   async stop(): Promise<void> {
@@ -183,7 +211,9 @@ export class TelegramBot {
       botUsername: this.botUsername,
       polling: this.polling,
       eventsConnected: this.eventsConnected,
+      lastPollOkAt: this.lastPollOkAt,
       lastUpdateAt: this.lastUpdateAt,
+      consecutiveTimeouts: this.consecutiveTimeouts,
       lastError: this.lastError,
       startedAt: this.startedAt,
       chatId: this.primaryChatId(),
@@ -199,6 +229,65 @@ export class TelegramBot {
   private noteError(error: unknown): void {
     this.lastError = errorMessage(error);
     telegramLog(this.lastError);
+  }
+
+  /** One-time transition message when the OpenCode service goes down or recovers. */
+  async notifyServiceState(
+    current: OpencodeServiceHealth,
+    previous: OpencodeServiceHealth,
+  ): Promise<void> {
+    const chatId = this.primaryChatId();
+    if (chatId === undefined || this.stopped) return;
+    if (current.state === "ok" && previous.state !== "ok") {
+      await this.sendRaw(
+        chatId,
+        `✅ OpenCode is reachable again (${describeOpencodeState(current)}). Agents can run again.`,
+      );
+      return;
+    }
+    if (current.state !== "ok" && current.state !== previous.state) {
+      await this.sendRaw(
+        chatId,
+        [
+          `⚠️ OpenCode is ${describeOpencodeState(current)}.`,
+          "Agents cannot run until it recovers; Telegram is still available.",
+          "Try: opencode service restart",
+        ].join("\n"),
+      );
+    }
+  }
+
+  private serviceWarning(): string | undefined {
+    const health = this.health?.status();
+    if (!health || health.state === "ok" || health.state === "unknown") return undefined;
+    return `⚠️ OpenCode is ${describeOpencodeState(health)}.`;
+  }
+
+  private withWarning(text: string): string {
+    const warning = this.serviceWarning();
+    return warning ? `${warning}\n\n${text}` : text;
+  }
+
+  private async sendServiceHealth(chatId: number): Promise<void> {
+    const health = this.health?.status();
+    const time = (value: number | undefined): string =>
+      value ? new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "never";
+    const lines = [
+      "Nerdr Telegram",
+      "",
+      `Bridge: ${this.polling ? "polling" : "not polling"}; last poll OK ${time(this.lastPollOkAt)}`,
+      `Last update: ${time(this.lastUpdateAt)}`,
+    ];
+    if (this.consecutiveTimeouts) lines.push(`Consecutive poll timeouts: ${this.consecutiveTimeouts}`);
+    lines.push(`OpenCode: ${health ? describeOpencodeState(health) : "health probe unavailable"}`);
+    if (health?.servicePid) {
+      lines.push(`Service: pid ${health.servicePid}${health.serviceVersion ? `, v${health.serviceVersion}` : ""}`);
+    }
+    if (health?.lastOkAt) lines.push(`Last OK: ${time(health.lastOkAt)}`);
+    if (health && health.consecutiveFailures > 0) {
+      lines.push(`Consecutive probe failures: ${health.consecutiveFailures}`);
+    }
+    await this.sendRaw(chatId, lines.join("\n"));
   }
 
   private async pollLoop(): Promise<void> {
@@ -220,6 +309,8 @@ export class TelegramBot {
         );
         backoff = 1000;
         this.lastError = undefined;
+        this.lastPollOkAt = Date.now();
+        this.consecutiveTimeouts = 0;
         for (const update of updates) {
           if (this.stopped) break;
           if (update.update_id < this.state.updateOffset) continue;
@@ -241,6 +332,9 @@ export class TelegramBot {
         }
       } catch (error) {
         if (this.stopped || isAbort(error)) break;
+        if (error instanceof TelegramApiError && /timed out/i.test(error.message)) {
+          this.consecutiveTimeouts += 1;
+        }
         if (error instanceof TelegramApiError) {
           if (error.code === 409) {
             telegramLog("getUpdates conflict (webhook or another poller); deleting webhook");
@@ -848,7 +942,7 @@ export class TelegramBot {
 
     await this.sendRaw(
       chatId,
-      "No active agent. Use /agents to list agents, or reply to a notification.",
+      this.withWarning("No active agent. Use /agents to list agents, or reply to a notification."),
     );
   }
 
@@ -869,6 +963,9 @@ export class TelegramBot {
         return;
       case "status":
         await this.showStatus(chatId);
+        return;
+      case "health":
+        await this.sendServiceHealth(chatId);
         return;
       case "stop":
         await this.stopActive(chatId);
@@ -919,6 +1016,8 @@ export class TelegramBot {
     const rendered = renderAgents(
       entries.map((info) => ({ info, active: info.id === active })),
     );
+    const warning = this.serviceWarning();
+    if (warning) rendered.text = `${warning}\n\n${rendered.text}`;
     this.state.setAgentList(chatId, entries.map((info) => info.id));
     await this.sendRaw(chatId, rendered.text, { reply_markup: rendered.keyboard });
   }
@@ -989,7 +1088,7 @@ export class TelegramBot {
   private async setMode(chatId: number, argument: string): Promise<void> {
     const id = this.state.getActive(chatId);
     if (!id) {
-      await this.sendRaw(chatId, "No active agent. Use /agents.");
+      await this.sendRaw(chatId, this.withWarning("No active agent. Use /agents."));
       return;
     }
     let info = this.state.getSession(id);
@@ -1103,7 +1202,7 @@ export class TelegramBot {
   private async showStatus(chatId: number): Promise<void> {
     const id = this.state.getActive(chatId);
     if (!id) {
-      await this.sendRaw(chatId, "No active agent. Use /agents.");
+      await this.sendRaw(chatId, this.withWarning("No active agent. Use /agents."));
       return;
     }
     let info = this.state.getSession(id);
@@ -1121,13 +1220,15 @@ export class TelegramBot {
     const pendingQuestions = Object.values(this.state.data.questions).filter(
       (question) => question.sessionID === id,
     ).length;
-    await this.sendRaw(chatId, renderStatus(info, pendingPermissions, pendingQuestions));
+    const text = renderStatus(info, pendingPermissions, pendingQuestions);
+    const warning = this.serviceWarning();
+    await this.sendRaw(chatId, warning ? `${warning}\n\n${text}` : text);
   }
 
   private async stopActive(chatId: number): Promise<void> {
     const id = this.state.getActive(chatId);
     if (!id) {
-      await this.sendRaw(chatId, "No active agent. Use /agents.");
+      await this.sendRaw(chatId, this.withWarning("No active agent. Use /agents."));
       return;
     }
     const info = this.state.getSession(id);
@@ -1166,7 +1267,12 @@ export class TelegramBot {
         error instanceof OpencodeError && error.status === 409
           ? " The agent is busy; wait for it to finish or use /stop."
           : "";
-      await this.sendRaw(chatId, `Could not send to ${agentName(info)}: ${errorMessage(error)}.${suffix}`);
+      const warning = this.serviceWarning();
+      const reason = warning ? "OpenCode is not available" : errorMessage(error);
+      await this.sendRaw(
+        chatId,
+        `Could not send to ${agentName(info)}: ${reason}.${suffix}${warning ? `\n\n${warning}` : ""}`,
+      );
     }
   }
 

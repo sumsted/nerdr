@@ -15,6 +15,13 @@ import {
   type TelegramNotifyState,
 } from "@nerdr/protocol";
 
+import {
+  formatTelegramHealth,
+  reloadTelegramDaemon,
+  startTelegramDaemon,
+  telegramDaemonHealth,
+} from "./telegramService.js";
+
 const TIMEOUT_MS = 10_000;
 
 interface TelegramUser {
@@ -49,28 +56,6 @@ interface TelegramUpdate {
   update_id: number;
   message?: { chat?: TelegramChat };
   callback_query?: { message?: { chat?: TelegramChat } };
-}
-
-interface BridgeHealth {
-  ok?: boolean;
-  leader?: boolean;
-  pid?: number;
-  leaderPort?: number;
-  configured?: boolean;
-  enabled?: boolean;
-  notifyStates?: string[];
-  error?: string;
-  bot?: {
-    running?: boolean;
-    botUsername?: string;
-    polling?: boolean;
-    eventsConnected?: boolean;
-    lastUpdateAt?: number;
-    lastError?: string;
-    chatId?: number;
-    pendingPermissions?: number;
-    pendingQuestions?: number;
-  };
 }
 
 function nerdrHome(): string {
@@ -190,38 +175,6 @@ function chatLabel(chat: TelegramChat): string {
     return chat.username ? `@${chat.username}` : chat.first_name || `Chat ${chat.id}`;
   }
   return chat.title || chat.username || `Chat ${chat.id}`;
-}
-
-async function bridgeHealth(port: number): Promise<BridgeHealth | undefined> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 1500);
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/health`, {
-      signal: controller.signal,
-    });
-    if (!response.ok) return undefined;
-    return (await response.json()) as BridgeHealth;
-  } catch {
-    return undefined;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function reloadBridge(port: number): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 1500);
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/reload`, {
-      method: "POST",
-      signal: controller.signal,
-    });
-    return response.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 function describeNotifyStates(states: TelegramNotifyState[]): string {
@@ -401,12 +354,26 @@ export async function configureTelegram(log: (message: string) => void): Promise
     return;
   }
 
-  const reloaded = await reloadBridge(config.leaderPort);
+  let started = false;
+  try {
+    started = Boolean(await startTelegramDaemon(log, { port: config.leaderPort }));
+  } catch (error) {
+    log(
+      `telegram: daemon start failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const reloaded = await reloadTelegramDaemon(config.leaderPort);
   log(
-    `telegram: configured @${me.username ?? me.id} chat ${chatId}; states ${describeNotifyStates(notifyStates)}; bridge ${reloaded ? "reloaded" : "not running"}`,
+    `telegram: configured @${me.username ?? me.id} chat ${chatId}; states ${describeNotifyStates(notifyStates)}; daemon ${started ? "running" : "not running"}; reload ${reloaded ? "sent" : "skipped"}`,
   );
+  if (!started) {
+    void vscode.window.showWarningMessage(
+      `Nerdr: Telegram configured${me.username ? ` for @${me.username}` : ""}, but the bridge is not running. Run “Nerdr: Start Telegram Bridge”.`,
+    );
+    return;
+  }
   void vscode.window.showInformationMessage(
-    `Nerdr: Telegram configured${me.username ? ` for @${me.username}` : ""}. ${reloaded ? "The bridge is live." : "The bridge starts with the OpenCode plugin."}`,
+    `Nerdr: Telegram configured${me.username ? ` for @${me.username}` : ""}. The bridge is live.`,
   );
 }
 
@@ -418,33 +385,33 @@ export async function showTelegramStatus(log: (message: string) => void): Promis
     );
     return;
   }
-  const health = await bridgeHealth(config.leaderPort);
+  const health = await telegramDaemonHealth(config.leaderPort);
   if (!health) {
     log(`telegram: no health response on 127.0.0.1:${config.leaderPort}`);
-    void vscode.window.showWarningMessage(
-      "Nerdr: Telegram is configured, but the bridge is not running. Ensure the Nerdr OpenCode plugin is deployed and OpenCode is running.",
+    const action = await vscode.window.showWarningMessage(
+      "Nerdr: Telegram is configured, but the bridge is not running.",
+      "Start Bridge",
+      "Show Log",
     );
+    if (action === "Start Bridge") {
+      try {
+        await startTelegramDaemon(log, { port: config.leaderPort });
+        void vscode.window.showInformationMessage("Nerdr: Telegram bridge started.");
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          `Nerdr: could not start the bridge — ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    } else if (action === "Show Log") {
+      await vscode.commands.executeCommand("nerdr.telegram.log");
+    }
     return;
   }
-  const lines = [
-    `Configured: yes (${config.enabled ? "enabled" : "disabled"})`,
-    `Bot: ${health.bot?.botUsername ? `@${health.bot.botUsername}` : "unknown"}`,
-    `Chat: ${config.allowedChatIds[0] ?? "none"}`,
-    `Notifications: ${describeNotifyStates(config.notifyStates)}`,
-    `Final text: ${config.includeFinalText ? `yes (${config.maxFinalChars} chars)` : "no"}`,
-    `Polling: ${health.bot?.polling ? "yes" : "no"}`,
-    `Events connected: ${health.bot?.eventsConnected ? "yes" : "no"}`,
-    `Pending permissions: ${health.bot?.pendingPermissions ?? 0}`,
-    `Pending questions: ${health.bot?.pendingQuestions ?? 0}`,
-    `Leader: pid ${health.pid ?? "?"} on 127.0.0.1:${health.leaderPort ?? config.leaderPort}`,
-  ];
-  if (health.bot?.lastError || health.error) {
-    lines.push(`Last error: ${health.bot?.lastError ?? health.error}`);
-  }
   log(`telegram health: ${JSON.stringify(health)}`);
-  void vscode.window.showInformationMessage(`Nerdr Telegram\n\n${lines.join("\n")}`, {
-    modal: true,
-  });
+  void vscode.window.showInformationMessage(
+    `Nerdr Telegram\n\n${formatTelegramHealth(health, config)}`,
+    { modal: true },
+  );
 }
 
 export async function testTelegram(log: (message: string) => void): Promise<void> {
@@ -491,9 +458,9 @@ export async function disableTelegram(log: (message: string) => void): Promise<v
     );
     return;
   }
-  const reloaded = await reloadBridge(next.leaderPort);
-  log(`telegram: disabled; bridge ${reloaded ? "reloaded" : "not running"}`);
+  const reloaded = await reloadTelegramDaemon(next.leaderPort);
+  log(`telegram: disabled; daemon reload ${reloaded ? "sent" : "skipped"}`);
   void vscode.window.showInformationMessage(
-    `Nerdr: Telegram disabled.${reloaded ? " The running bridge has stopped polling." : ""}`,
+    `Nerdr: Telegram disabled.${reloaded ? " The running bridge has stopped polling." : " The bridge is not running."}`,
   );
 }

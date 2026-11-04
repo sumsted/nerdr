@@ -75,6 +75,7 @@ export function renderHelp(botUsername?: string): string {
     `/use <name|number|session> — select an agent`,
     `/mode [name] — show or change the Plan/Build mode`,
     `/status — show the active agent`,
+    `/health — Telegram and OpenCode service health`,
     `/stop — interrupt the active agent`,
     `/help — this message`,
     ``,

@@ -3,12 +3,15 @@ import { normalizeTelegramConfig, type TelegramConfig } from "@nerdr/protocol";
 import { telegramConfigPath } from "./paths.js";
 import { errorMessage, telegramLog } from "./log.js";
 
+const warnedPermissions = new Set<string>();
+
 /** Read and validate ~/.nerdr/telegram.json. */
 export function loadTelegramConfig(): TelegramConfig | undefined {
   const file = telegramConfigPath();
   try {
     const stat = fs.statSync(file);
-    if ((stat.mode & 0o077) !== 0) {
+    if ((stat.mode & 0o077) !== 0 && !warnedPermissions.has(file)) {
+      warnedPermissions.add(file);
       telegramLog(`${file} is readable by other users; run chmod 600`);
     }
     const raw = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;

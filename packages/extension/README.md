@@ -25,19 +25,33 @@ Telegram commands:
 
 - **Nerdr: Configure Telegram** — paste a @BotFather token, choose the private
   chat and notification states, and send a test message
-- **Nerdr: Telegram Status** — show polling, event-stream, and pending-input
+- **Nerdr: Start Telegram Bridge** — start the standalone daemon
+- **Nerdr: Stop Telegram Bridge** / **Restart Telegram Bridge**
+- **Nerdr: Manage Telegram Bridge** — one menu for start/stop/status/log
+- **Nerdr: Telegram Status** — show daemon, polling, OpenCode, and pending-input
   health
+- **Nerdr: Show Telegram Log** — open `~/.nerdr/telegram.log`
 - **Nerdr: Test Telegram** — send another test message
 - **Nerdr: Disable Telegram** — stop polling while keeping the configuration
 
-Chat commands: `/agents`, `/use`, `/mode`, `/status`, `/stop`, and `/help`.
-`/mode` switches the active session between OpenCode agents such as Plan and
-Build.
+Chat commands: `/agents`, `/use`, `/mode`, `/status`, `/health`, `/stop`, and
+`/help`. `/mode` switches the active session between OpenCode agents such as
+Plan and Build.
 
-The Telegram bridge uses long polling inside the OpenCode plugin, so it needs no
-VPS, tunnel, or public webhook. Only the OpenCode instance that binds
-`127.0.0.1:49377` polls; all other locations retry quietly. Configuration lives
-in `~/.nerdr/telegram.json` with mode `0600`.
+The Telegram bridge is a standalone local daemon managed by this extension. It
+uses long polling, so it needs no VPS, tunnel, or public webhook, and it keeps
+running when the OpenCode plugin stops or the VSCodium window closes. There is no
+boot service: after a reboot, run **Nerdr: Start Telegram Bridge**.
+`nerdr.telegram.autoStart` (default `false`) can start it automatically when
+VSCodium activates; `nerdr.telegram.stopOnExit` (default `false`) keeps it
+running when the window closes. Configuration lives in
+`~/.nerdr/telegram.json` with mode `0600`; the control token is in
+`~/.nerdr/telegram-control-token`.
 
-Requires the matching OpenCode plugin: copy `nerdr.js` into
-`~/.config/opencode/plugins/` (see the root README).
+The daemon also probes the local OpenCode API. When OpenCode is unreachable or
+unresponsive, `/status` and `/health` say so, `/agents` shows cached agents marked
+stale, and prompts are rejected explicitly rather than silently queued.
+
+Requires the matching OpenCode plugin for the agent roster. The Telegram daemon
+talks to the OpenCode HTTP API directly and does not require the plugin to be
+running; see the root README.
