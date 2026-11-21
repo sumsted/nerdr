@@ -21,7 +21,7 @@ const BUSY_LOG_MS = 300_000;
 const WATCHDOG_MS = 30_000;
 const POLL_STALL_MS = 180_000;
 
-export const DAEMON_VERSION = process.env.NERDR_DAEMON_VERSION || "0.2.0";
+export const DAEMON_VERSION = process.env.NERDR_DAEMON_VERSION || "0.2.1";
 
 export interface TelegramLeaderOptions {
   /** Who owns this process. The standalone daemon sets "daemon". */

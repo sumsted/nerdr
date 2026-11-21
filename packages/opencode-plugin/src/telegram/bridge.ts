@@ -4,6 +4,7 @@ import { TelegramApi, TelegramApiError, type TelegramCallbackQuery, type Telegra
 import { OpencodeClient, OpencodeError, type OpencodeAgent, type OpencodeEvent, type OpencodeForm, type OpencodeFormField, type OpencodePermission, type OpencodeSession } from "./opencode.js";
 import { TelegramStateStore, type TelegramFormValue, type TelegramQuestionField, type TelegramQuestionRef, type TelegramSessionInfo } from "./state.js";
 import { describeOpencodeState, type ServiceHealth } from "./health.js";
+import { chunkMarkdown, markdownToTelegramHtml } from "./markdown.js";
 import {
   agentName,
   chunkText,
@@ -671,7 +672,9 @@ export class TelegramBot {
     if (previous === "done" && !text) return;
     if (!this.config.notifyStates.includes("done")) return;
     const body = this.config.includeFinalText ? text : undefined;
-    await this.sendSession(info, renderDone(info, body, this.config.maxFinalChars), "final");
+    await this.sendSession(info, renderDone(info, body, this.config.maxFinalChars), "final", {
+      format: "html",
+    });
   }
 
   private async notifyError(
@@ -682,7 +685,9 @@ export class TelegramBot {
     const previous = this.state.setSessionStatus(info.id, "error", eventType);
     if (previous === "error") return;
     if (!this.config.notifyStates.includes("error")) return;
-    await this.sendSession(info, renderError(info, message), "status");
+    await this.sendSession(info, renderError(info, message), "status", {
+      format: "html",
+    });
   }
 
   private permissionFromData(data: Record<string, unknown>): OpencodePermission | undefined {
@@ -827,16 +832,36 @@ export class TelegramBot {
     info: SessionInfo,
     text: string,
     kind: "status" | "final",
+    options: { format?: "html" } = {},
   ): Promise<void> {
     const chatId = this.primaryChatId();
     if (chatId === undefined) return;
-    for (const chunk of chunkText(text)) {
-      const message = await this.api.sendMessage(chatId, chunk);
+    const chunks =
+      options.format === "html" ? chunkMarkdown(text) : chunkText(text);
+    for (const chunk of chunks) {
+      const message =
+        options.format === "html"
+          ? await this.sendFormatted(chatId, chunk)
+          : await this.api.sendMessage(chatId, chunk);
       this.state.rememberMessage(chatId, message.message_id, {
         sessionID: info.id,
         title: agentName(info),
         kind,
       });
+    }
+  }
+
+  /** Send a chunk as Telegram HTML, falling back to plain text on parse errors. */
+  private async sendFormatted(chatId: number, text: string): Promise<TelegramMessage> {
+    const html = markdownToTelegramHtml(text);
+    try {
+      return await this.api.sendMessage(chatId, html, { parse_mode: "HTML" });
+    } catch (error) {
+      if (error instanceof TelegramApiError && error.code === 400) {
+        telegramLog(`Telegram rejected HTML; retrying plain: ${error.message}`);
+        return await this.api.sendMessage(chatId, text);
+      }
+      throw error;
     }
   }
 

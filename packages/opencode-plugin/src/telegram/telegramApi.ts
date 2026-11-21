@@ -51,6 +51,7 @@ export interface TelegramInlineKeyboard {
 export interface SendMessageOptions {
   reply_markup?: TelegramInlineKeyboard;
   disable_web_page_preview?: boolean;
+  parse_mode?: "HTML" | "MarkdownV2";
 }
 
 export class TelegramApiError extends Error {
@@ -175,6 +176,7 @@ export class TelegramApi {
       chat_id: chatId,
       text,
       disable_web_page_preview: options?.disable_web_page_preview ?? true,
+      ...(options?.parse_mode ? { parse_mode: options.parse_mode } : {}),
       ...(options?.reply_markup ? { reply_markup: options.reply_markup } : {}),
     });
   }
@@ -191,6 +193,7 @@ export class TelegramApi {
         message_id: messageId,
         text,
         disable_web_page_preview: options?.disable_web_page_preview ?? true,
+        ...(options?.parse_mode ? { parse_mode: options.parse_mode } : {}),
         ...(options?.reply_markup ? { reply_markup: options.reply_markup } : {}),
       });
     } catch (error) {
