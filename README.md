@@ -73,7 +73,7 @@ Package the extension (the build must run first so the daemon bundle exists):
 ```bash
 npm run build
 npm run package -w nerdr
-# -> packages/extension/nerdr-0.2.0.vsix
+# -> packages/extension/nerdr-0.2.1.vsix
 ```
 
 If you run only `npm run package -w nerdr`, the build output and
@@ -86,14 +86,14 @@ Then install the VSIX, either from the VSCodium UI
 ```bash
 # macOS (bundled CLI path)
 "/Applications/VSCodium.app/Contents/Resources/app/bin/codium" \
-  --install-extension packages/extension/nerdr-0.2.0.vsix
+  --install-extension packages/extension/nerdr-0.2.1.vsix
 
 # Linux
-codium --install-extension packages/extension/nerdr-0.2.0.vsix
+codium --install-extension packages/extension/nerdr-0.2.1.vsix
 
 # Windows (PowerShell)
 & "$env:LOCALAPPDATA\Programs\VSCodium\bin\codium.cmd" `
-  --install-extension packages\extension\nerdr-0.2.0.vsix
+  --install-extension packages\extension\nerdr-0.2.1.vsix
 ```
 
 If `codium` is not on your `PATH`, run **"Shell Command: Install 'codium'
@@ -153,7 +153,7 @@ start Telegram; the daemon is a separate process managed from VSCodium.
    `npm run build` must run before packaging. It produces
    `packages/opencode-plugin/dist/nerdr.js` and copies the daemon bundle to
    `packages/extension/bin/nerdr-telegram.mjs`.
-2. Install `packages/extension/nerdr-0.2.0.vsix` (see above).
+2. Install `packages/extension/nerdr-0.2.1.vsix` (see above).
 3. Copy the plugin bundle:
    ```bash
    mkdir -p ~/.config/opencode/plugins
@@ -171,7 +171,7 @@ start Telegram; the daemon is a separate process managed from VSCodium.
    ```bash
    curl -s http://127.0.0.1:49377/health | python3 -m json.tool
    ```
-   Expect `"managedBy": "daemon"`, `"daemonVersion": "0.2.0"`, and
+   Expect `"managedBy": "daemon"`, `"daemonVersion": "0.2.1"`, and
    `"opencode": { "state": "ok", ... }`.
 7. In Telegram, send `/help`, `/agents`, `/status`, and `/health`.
 
@@ -182,7 +182,7 @@ daemon. Installing the new VSIX and copying the plugin is **not enough**: the
 new plugin no longer starts Telegram, so the bot stays silent until the daemon is
 started.
 
-1. Install the 0.2.0 VSIX.
+1. Install the 0.2.1 VSIX.
 2. Copy the new `nerdr.js` to `~/.config/opencode/plugins/nerdr.js`.
 3. Reload VSCodium.
 4. Run **Nerdr: Start Telegram Bridge** (or **Nerdr: Configure Telegram**).
@@ -312,6 +312,12 @@ notification to send a prompt to that agent. Permission requests arrive with
 forms arrive with option buttons (typed replies are also accepted). When a turn
 finishes, Nerdr sends the final assistant text, truncated to 3,500 characters by
 default.
+
+Final assistant text and error details are rendered as Telegram **HTML**: bold,
+italic, strikethrough, inline code, fenced code blocks, links, headings,
+blockquotes, and lists. Telegram does not parse standard Markdown directly, so
+Nerdr converts it. If Telegram rejects the markup, the message is resent as plain
+text and the reason is written to `~/.nerdr/telegram.log`.
 
 Use one private chat per machine. Do not add the bot to a group: anyone in an
 allowed chat can approve permissions and drive agents.
@@ -524,7 +530,7 @@ timeouts and never marks a workspace offline based on process scans.
   (e.g. `nerdr · tidy-falcon`).
 - **Port already in use.** The extension automatically tries the next free port
   and advertises it in `~/.nerdr/bridge.json`; the plugin follows.
-- **Bot is silent after upgrading to 0.2.0.** Installing the VSIX and copying
+- **Bot is silent after upgrading to 0.2.1.** Installing the VSIX and copying
   the plugin does not start Telegram. Run **Nerdr: Start Telegram Bridge** (or
   **Nerdr: Manage Telegram Bridge**). The daemon, not the plugin, owns polling
   now.
@@ -543,7 +549,7 @@ timeouts and never marks a workspace offline based on process scans.
   extension:
   ```bash
   # macOS: run in the background
-  cp ~/.vscode-oss/extensions/nerdr.nerdr-0.2.0/bin/nerdr-telegram.mjs ~/.nerdr/
+  cp ~/.vscode-oss/extensions/nerdr.nerdr-0.2.1/bin/nerdr-telegram.mjs ~/.nerdr/
   chmod 700 ~/.nerdr/nerdr-telegram.mjs
   nohup env NERDR_HOME="$HOME/.nerdr" ELECTRON_RUN_AS_NODE=1 \
     "/Applications/VSCodium.app/Contents/MacOS/VSCodium" \
